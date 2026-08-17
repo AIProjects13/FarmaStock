@@ -78,7 +78,7 @@
 
         <div id="sidebar-overlay" class="hidden fixed inset-0 bg-black/40 z-40 md:hidden" onclick="toggleSidebar()"></div>
 
-        <aside id="sidebar" class="absolute md:relative w-64 bg-primary text-white flex flex-col justify-between py-6 shadow-xl z-50 h-full transform -translate-x-full md:translate-x-0 transition-transform duration-300">
+        <aside id="sidebar" class="absolute md:relative w-64 bg-primary text-white flex flex-col justify-between py-6 shadow-xl z-50 h-full transform -translate-x-full md:translate-x-0 transition-all duration-300 shrink-0 overflow-hidden">
             <div>
                 <div class="flex items-center gap-3 px-5 mb-8">
                     <div class="w-9 h-9 rounded-xl bg-accent/15 flex items-center justify-center">
@@ -111,7 +111,7 @@
         <main class="flex-1 flex flex-col min-w-0 h-full">
             <header class="flex items-center justify-between px-4 md:px-8 py-4 bg-white border-b border-gray-200 shrink-0">
                 <div class="flex items-center gap-3">
-                    <button onclick="toggleSidebar()" class="md:hidden text-primary p-2 hover:bg-gray-100 rounded-lg"><i class="fa-solid fa-bars text-xl"></i></button>
+                    <button onclick="toggleSidebar()" class="text-primary p-2 hover:bg-gray-100 rounded-lg" title="Mostrar/ocultar menú"><i class="fa-solid fa-bars text-xl"></i></button>
                     <h2 class="font-bold text-lg md:text-xl text-primary" id="top-title">Dashboard</h2>
                 </div>
                 <div class="flex items-center gap-2 md:gap-3">

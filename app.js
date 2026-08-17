@@ -79,8 +79,14 @@ window.closeModal = id => {
 window.toggleSidebar = () => {
     const sb = document.getElementById('sidebar');
     const ov = document.getElementById('sidebar-overlay');
-    sb.classList.toggle('-translate-x-full');
-    ov.classList.toggle('hidden');
+    if (window.innerWidth < 768) {
+        // Celular: el menú se desliza encima del contenido, con fondo oscuro detrás.
+        if (sb) sb.classList.toggle('-translate-x-full');
+        if (ov) ov.classList.toggle('hidden');
+    } else {
+        // Escritorio: el menú se colapsa (se oculta con margen) en vez de deslizarse.
+        if (sb) sb.classList.toggle('md:-ml-64');
+    }
 };
 
 const setLoader = (visible) => {
