@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FarmaStock — Inventario</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📦</text></svg>">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['"Inter"', 'sans-serif'] },
+                    colors: {
+                        primary: '#0B192C',
+                        accent: '#00D1FF',
+                        surface: '#F4F6F9'
+                    }
+                }
+            }
+        };
+    </script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="font-sans antialiased bg-surface text-primary">
+
+    <!-- LOADER GLOBAL -->
+    <div id="global-loader" class="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-primary" style="display:none;">
+        <div class="w-12 h-12 border-4 border-accent border-t-transparent rounded-full animate-spin mb-4"></div>
+        <h2 class="text-white/80 font-semibold text-sm tracking-wide">Sincronizando inventario…</h2>
+    </div>
+
+    <!-- LOGIN -->
+    <div id="auth-view" class="fixed inset-0 z-50 flex items-center justify-center bg-primary w-full h-full overflow-hidden">
+        <div class="absolute -top-32 -right-32 w-96 h-96 bg-accent/20 rounded-full blur-3xl"></div>
+        <div class="absolute -bottom-32 -left-32 w-96 h-96 bg-accent/10 rounded-full blur-3xl"></div>
+
+        <div class="relative w-full max-w-sm mx-4 bg-white/95 backdrop-blur rounded-2xl shadow-2xl p-8 animate-fade">
+            <div class="flex flex-col items-center mb-6">
+                <div class="w-14 h-14 rounded-2xl bg-primary flex items-center justify-center mb-3 shadow-lg">
+                    <i class="fa-solid fa-cubes-stacked text-accent text-2xl"></i>
+                </div>
+                <h1 class="text-2xl font-extrabold text-primary">FarmaStock</h1>
+                <p class="text-xs text-gray-500 mt-1">Control de inventario</p>
+            </div>
+
+            <form id="login-form" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Correo</label>
+                    <input type="email" id="auth-email" class="input-base" placeholder="tucorreo@ejemplo.com" required autocomplete="username">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Contraseña</label>
+                    <div class="relative">
+                        <input type="password" id="auth-password" class="input-base pr-10" placeholder="••••••••" required autocomplete="current-password">
+                        <button type="button" onclick="togglePassword()" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-primary">
+                            <i class="fa-solid fa-eye" id="eye-icon"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <p id="login-error" class="text-red-500 text-xs font-semibold hidden"></p>
+
+                <button type="submit" id="btn-login" class="w-full btn-accent flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-right-to-bracket"></i> Ingresar
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- APP -->
+    <div id="app-view" class="hidden-view h-screen w-full flex overflow-hidden">
+
+        <div id="sidebar-overlay" class="hidden fixed inset-0 bg-black/40 z-40 md:hidden" onclick="toggleSidebar()"></div>
+
+        <aside id="sidebar" class="absolute md:relative w-64 bg-primary text-white flex flex-col justify-between py-6 shadow-xl z-50 h-full transform -translate-x-full md:translate-x-0 transition-transform duration-300">
+            <div>
+                <div class="flex items-center gap-3 px-5 mb-8">
+                    <div class="w-9 h-9 rounded-xl bg-accent/15 flex items-center justify-center">
+                        <i class="fa-solid fa-cubes-stacked text-accent"></i>
+                    </div>
+                    <div>
+                        <h1 class="font-extrabold text-lg leading-none">FarmaStock</h1>
+                        <p class="text-[10px] text-gray-400 tracking-wide">INVENTARIO</p>
+                    </div>
+                </div>
+                <nav class="flex flex-col gap-1 px-3">
+                    <a href="#" data-target="tab-dash" class="nav-btn active flex items-center gap-3 px-4 py-3 text-gray-300 hover:text-primary hover:bg-accent rounded-xl transition-colors font-medium">
+                        <i class="fa-solid fa-gauge-high w-4"></i> Dashboard
+                    </a>
+                    <a href="#" data-target="tab-inv" class="nav-btn flex items-center gap-3 px-4 py-3 text-gray-300 hover:text-primary hover:bg-accent rounded-xl transition-colors font-medium">
+                        <i class="fa-solid fa-boxes-stacked w-4"></i> Inventario
+                    </a>
+                    <a href="#" data-target="tab-hist" class="nav-btn flex items-center gap-3 px-4 py-3 text-gray-300 hover:text-primary hover:bg-accent rounded-xl transition-colors font-medium">
+                        <i class="fa-solid fa-clock-rotate-left w-4"></i> Reabastecimiento
+                    </a>
+                </nav>
+            </div>
+            <div class="px-3">
+                <button onclick="handleLogout()" class="w-full flex items-center gap-3 px-4 py-3 text-gray-300 hover:text-white hover:bg-white/10 rounded-xl transition-colors font-medium">
+                    <i class="fa-solid fa-right-from-bracket w-4"></i> Cerrar sesión
+                </button>
+            </div>
+        </aside>
+
+        <main class="flex-1 flex flex-col min-w-0 h-full">
+            <header class="flex items-center justify-between px-4 md:px-8 py-4 bg-white border-b border-gray-200 shrink-0">
+                <div class="flex items-center gap-3">
+                    <button onclick="toggleSidebar()" class="md:hidden text-primary p-2 hover:bg-gray-100 rounded-lg"><i class="fa-solid fa-bars text-xl"></i></button>
+                    <h2 class="font-bold text-lg md:text-xl text-primary" id="top-title">Dashboard</h2>
+                </div>
+                <div class="flex items-center gap-2 md:gap-3">
+                    <button onclick="syncData()" class="bg-gray-100 hover:bg-gray-200 text-primary w-9 h-9 rounded-lg transition flex items-center justify-center" title="Forzar sincronización">
+                        <i class="fa-solid fa-rotate-right" id="sync-icon"></i>
+                    </button>
+                    <div class="flex items-center gap-2 pl-2 md:pl-3 border-l border-gray-200">
+                        <div class="w-8 h-8 rounded-full bg-primary text-accent flex items-center justify-center text-xs font-bold" id="user-avatar">?</div>
+                        <div class="hidden sm:block leading-tight">
+                            <p class="text-sm font-bold text-primary" id="user-display">—</p>
+                            <p class="text-[10px] font-bold uppercase tracking-wide" id="user-role-badge"></p>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <div class="flex-1 overflow-y-auto p-4 md:p-8">
+
+                <!-- DASHBOARD -->
+                <section id="tab-dash" class="tab-view animate-fade">
+                    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                        <div class="kpi-card">
+                            <div class="kpi-icon bg-blue-50 text-blue-600 mb-3"><i class="fa-solid fa-boxes-stacked"></i></div>
+                            <p class="text-xs font-bold text-gray-400 uppercase">Productos</p>
+                            <p class="text-2xl md:text-3xl font-black text-primary" id="kpi-total-productos">0</p>
+                        </div>
+                        <div class="kpi-card">
+                            <div class="kpi-icon bg-red-50 text-red-500 mb-3"><i class="fa-solid fa-triangle-exclamation"></i></div>
+                            <p class="text-xs font-bold text-gray-400 uppercase">Sin stock</p>
+                            <p class="text-2xl md:text-3xl font-black text-primary" id="kpi-sin-stock">0</p>
+                        </div>
+                        <div class="kpi-card">
+                            <div class="kpi-icon bg-amber-50 text-amber-500 mb-3"><i class="fa-solid fa-hourglass-half"></i></div>
+                            <p class="text-xs font-bold text-gray-400 uppercase">Por vencer (30d)</p>
+                            <p class="text-2xl md:text-3xl font-black text-primary" id="kpi-por-vencer">0</p>
+                        </div>
+                        <div class="kpi-card">
+                            <div class="kpi-icon bg-emerald-50 text-emerald-600 mb-3"><i class="fa-solid fa-sack-dollar"></i></div>
+                            <p class="text-xs font-bold text-gray-400 uppercase">Valor de venta potencial</p>
+                            <p class="text-xl md:text-2xl font-black text-primary truncate" id="kpi-valor-venta">$0.00</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                        <div class="lg:col-span-2 bg-white rounded-xl border border-gray-100 p-5">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="font-bold text-primary"><i class="fa-solid fa-triangle-exclamation text-amber-500 mr-2"></i>Alertas de vencimiento</h3>
+                            </div>
+                            <div id="dash-vencimientos" class="space-y-2"></div>
+                            <p id="dash-vencimientos-empty" class="text-sm text-gray-400 text-center py-6 hidden">No hay productos por vencer en los próximos 30 días.</p>
+                        </div>
+
+                        <div class="bg-white rounded-xl border border-gray-100 p-5">
+                            <h3 class="font-bold text-primary mb-4"><i class="fa-solid fa-clock-rotate-left text-accent mr-2"></i>Últimos reabastecimientos</h3>
+                            <div id="dash-recientes" class="space-y-3"></div>
+                            <p id="dash-recientes-empty" class="text-sm text-gray-400 text-center py-6 hidden">Todavía no hay movimientos.</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- INVENTARIO -->
+                <section id="tab-inv" class="tab-view hidden-view animate-fade">
+                    <div class="flex flex-col sm:flex-row sm:items-center gap-3 justify-between mb-5">
+                        <div class="relative w-full sm:max-w-xs">
+                            <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
+                            <input type="text" id="inv-search" class="input-base pl-9" placeholder="Buscar producto o proveedor…" oninput="renderInventario()">
+                        </div>
+                        <button onclick="openNewProducto()" class="admin-only btn-accent flex items-center justify-center gap-2 shrink-0">
+                            <i class="fa-solid fa-plus"></i> Nuevo producto
+                        </button>
+                    </div>
+
+                    <div id="inv-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"></div>
+                    <div id="inv-empty" class="hidden text-center py-20">
+                        <i class="fa-solid fa-box-open text-4xl text-gray-300 mb-3"></i>
+                        <p class="text-gray-400 font-medium">No se encontraron productos.</p>
+                    </div>
+                </section>
+
+                <!-- HISTORIAL -->
+                <section id="tab-hist" class="tab-view hidden-view animate-fade">
+                    <div class="relative w-full sm:max-w-xs mb-5">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
+                        <input type="text" id="hist-search" class="input-base pl-9" placeholder="Buscar por producto o proveedor…" oninput="renderHistorial()">
+                    </div>
+                    <div class="bg-white rounded-xl border border-gray-100 overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm">
+                                <thead class="bg-gray-50 text-gray-500 uppercase text-[11px] font-bold">
+                                    <tr>
+                                        <th class="text-left px-4 py-3">Fecha</th>
+                                        <th class="text-left px-4 py-3">Producto</th>
+                                        <th class="text-right px-4 py-3">Cantidad</th>
+                                        <th class="text-left px-4 py-3">Proveedor</th>
+                                        <th class="text-right px-4 py-3">Costo unitario</th>
+                                        <th class="text-left px-4 py-3">Usuario</th>
+                                        <th class="text-left px-4 py-3">Notas</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="hist-tbody" class="divide-y divide-gray-100"></tbody>
+                            </table>
+                        </div>
+                        <p id="hist-empty" class="hidden text-center text-gray-400 py-16">Aún no hay reabastecimientos registrados.</p>
+                    </div>
+                </section>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- MODAL PRODUCTO -->
+    <div id="mod-producto" class="fixed inset-0 modal-bg z-[60] flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl w-full max-w-lg modal-content shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="p-5 border-b border-gray-200 flex justify-between items-center bg-gray-50 shrink-0">
+                <h3 class="font-bold text-primary text-lg" id="mod-prod-title">Nuevo producto</h3>
+                <button onclick="closeModal('mod-producto')" class="text-gray-400 hover:text-red-500 transition"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div class="p-5 space-y-4 overflow-y-auto">
+                <input type="hidden" id="prd-id">
+
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Foto del producto <span class="normal-case font-normal text-gray-400">(opcional)</span></label>
+                    <div id="prd-drop" class="drop-zone flex flex-col items-center justify-center py-5 relative">
+                        <img id="prd-imagen-preview" class="hidden w-24 h-24 object-cover rounded-xl mb-2" />
+                        <i id="prd-imagen-icon" class="fa-solid fa-image text-2xl text-gray-300 mb-2"></i>
+                        <p class="text-xs text-gray-400" id="prd-imagen-hint">Haz clic o arrastra una imagen (máx. ~40 KB comprimida)</p>
+                        <button type="button" id="prd-imagen-quitar" onclick="quitarImagenProducto(event)" class="hidden text-[11px] text-red-500 font-bold mt-2"><i class="fa-solid fa-trash mr-1"></i>Quitar imagen</button>
+                        <input type="file" id="prd-imagen-input" accept="image/*" class="absolute inset-0 opacity-0 cursor-pointer">
+                    </div>
+                    <input type="hidden" id="prd-imagen-data">
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="col-span-2">
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Nombre del producto *</label>
+                        <input type="text" id="prd-nombre" class="input-base" required>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Costo *</label>
+                        <input type="number" step="0.01" min="0" id="prd-costo" class="input-base" oninput="calcMargen()" required>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Precio de venta *</label>
+                        <input type="number" step="0.01" min="0" id="prd-precio" class="input-base" oninput="calcMargen()" required>
+                    </div>
+                    <div class="col-span-2 bg-gray-100 p-3 rounded-lg border border-gray-200 text-center">
+                        <p class="text-xs text-gray-500 font-bold uppercase">Margen de ganancia calculado</p>
+                        <p class="text-2xl font-black text-primary" id="prd-margen-calc">0.00%</p>
+                    </div>
+                    <div id="prd-cantidad-wrap">
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Cantidad inicial *</label>
+                        <input type="number" min="0" id="prd-cantidad-inicial" class="input-base" value="0" required>
+                    </div>
+                    <div id="prd-existencias-wrap" class="hidden">
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Existencias actuales</label>
+                        <input type="number" id="prd-existencias" class="input-base" disabled>
+                        <p class="text-[10px] text-gray-400 mt-1">Se actualiza desde "Reabastecer"</p>
+                    </div>
+                    <div class="col-span-2">
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Proveedor <span class="normal-case font-normal text-gray-400">(opcional)</span></label>
+                        <input type="text" id="prd-proveedor" class="input-base" placeholder="Ej: Distribuidora Central">
+                    </div>
+                    <div class="col-span-2">
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Teléfono del proveedor <span class="normal-case font-normal text-gray-400">(opcional)</span></label>
+                        <input type="tel" id="prd-proveedor-tel" class="input-base" placeholder="Ej: 5555-5555">
+                    </div>
+                    <div class="col-span-2">
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Fecha de vencimiento <span class="normal-case font-normal text-gray-400">(opcional)</span></label>
+                        <input type="date" id="prd-vencimiento" class="input-base">
+                    </div>
+                </div>
+            </div>
+            <div class="p-5 border-t border-gray-200 flex gap-2 shrink-0">
+                <button type="button" id="prd-btn-eliminar" onclick="confirmarEliminarProducto()" class="hidden btn-danger"><i class="fa-solid fa-trash"></i></button>
+                <button type="button" onclick="saveProducto()" class="flex-1 btn-accent" id="prd-btn-guardar">Guardar producto</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL REABASTECER -->
+    <div id="mod-reabastecer" class="fixed inset-0 modal-bg z-[60] flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl w-full max-w-md modal-content shadow-2xl overflow-hidden flex flex-col">
+            <div class="p-5 border-b border-gray-200 flex justify-between items-center bg-gray-50">
+                <h3 class="font-bold text-primary text-lg"><i class="fa-solid fa-box-open mr-2"></i>Reabastecer stock</h3>
+                <button onclick="closeModal('mod-reabastecer')" class="text-gray-400 hover:text-red-500 transition"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div class="p-5 space-y-4">
+                <input type="hidden" id="rst-id-producto">
+                <div class="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                    <p class="text-xs text-gray-400 font-bold uppercase">Producto</p>
+                    <p class="font-bold text-primary" id="rst-nombre-producto">—</p>
+                    <p class="text-xs text-gray-400 mt-1">Existencias actuales: <span id="rst-existencias-actuales" class="font-bold text-primary">0</span></p>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Cantidad a agregar *</label>
+                    <input type="number" min="1" id="rst-cantidad" class="input-base" required>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Costo unitario <span class="normal-case font-normal text-gray-400">(opc.)</span></label>
+                        <input type="number" step="0.01" min="0" id="rst-costo-unitario" class="input-base">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Proveedor <span class="normal-case font-normal text-gray-400">(opc.)</span></label>
+                        <input type="text" id="rst-proveedor" class="input-base">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Notas <span class="normal-case font-normal text-gray-400">(opc.)</span></label>
+                    <textarea id="rst-notas" class="input-base h-16 resize-none"></textarea>
+                </div>
+            </div>
+            <div class="p-5 border-t border-gray-200 flex gap-2">
+                <button type="button" onclick="closeModal('mod-reabastecer')" class="flex-1 btn-ghost">Cancelar</button>
+                <button type="button" onclick="saveRestock()" class="flex-1 btn-accent"><i class="fa-solid fa-check mr-2"></i>Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL HISTORIAL POR PRODUCTO -->
+    <div id="mod-historial-producto" class="fixed inset-0 modal-bg z-[60] flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl w-full max-w-lg modal-content shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+            <div class="p-5 border-b border-gray-200 flex justify-between items-center bg-gray-50 shrink-0">
+                <h3 class="font-bold text-primary text-lg" id="hist-prod-title">Historial</h3>
+                <button onclick="closeModal('mod-historial-producto')" class="text-gray-400 hover:text-red-500 transition"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div class="p-5 overflow-y-auto">
+                <div id="hist-prod-list" class="space-y-3"></div>
+                <p id="hist-prod-empty" class="hidden text-center text-gray-400 py-10">Este producto no tiene reabastecimientos aún.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL CONFIRMAR ELIMINAR -->
+    <div id="mod-confirm-delete" class="fixed inset-0 modal-bg z-[70] flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl w-full max-w-sm modal-content shadow-2xl overflow-hidden flex flex-col">
+            <div class="p-6 text-center">
+                <div class="w-14 h-14 rounded-full bg-red-50 text-red-500 flex items-center justify-center mx-auto mb-4 text-xl">
+                    <i class="fa-solid fa-trash"></i>
+                </div>
+                <h3 class="font-bold text-primary text-lg mb-1">¿Eliminar producto?</h3>
+                <p class="text-sm text-gray-500" id="confirm-delete-msg">Esta acción no se puede deshacer.</p>
+            </div>
+            <div class="p-5 border-t border-gray-200 flex gap-2">
+                <button type="button" onclick="closeModal('mod-confirm-delete')" class="flex-1 btn-ghost">Cancelar</button>
+                <button type="button" onclick="executeDeleteProducto()" class="flex-1 btn-danger !bg-red-500 !text-white !border-red-500">Eliminar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- TOAST -->
+    <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 translate-y-24 opacity-0 transition-all duration-300 bg-white shadow-2xl rounded-xl px-5 py-3 flex items-center gap-3 z-[100] border border-gray-100 max-w-[92vw]">
+        <i id="toast-icon" class="fa-solid fa-circle-check text-accent text-lg"></i>
+        <p id="toast-msg" class="text-sm font-semibold text-primary"></p>
+    </div>
+
+    <script type="module" src="app.js"></script>
+</body>
+</html>
