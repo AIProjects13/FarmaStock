@@ -193,10 +193,26 @@
                         </button>
                     </div>
 
-                    <div id="inv-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"></div>
-                    <div id="inv-empty" class="hidden text-center py-20">
-                        <i class="fa-solid fa-box-open text-4xl text-gray-300 mb-3"></i>
-                        <p class="text-gray-400 font-medium">No se encontraron productos.</p>
+                    <div class="bg-white rounded-xl border border-gray-100 overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm">
+                                <thead class="bg-gray-50 text-gray-500 uppercase text-[11px] font-bold">
+                                    <tr>
+                                        <th class="text-left px-4 py-3">Producto</th>
+                                        <th class="text-right px-4 py-3">Existencias</th>
+                                        <th class="text-left px-4 py-3">Vencimiento</th>
+                                        <th class="text-right px-4 py-3">Costo</th>
+                                        <th class="text-right px-4 py-3">Precio venta</th>
+                                        <th class="text-right px-4 py-3">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="inv-tbody" class="divide-y divide-gray-100"></tbody>
+                            </table>
+                        </div>
+                        <div id="inv-empty" class="hidden text-center py-16">
+                            <i class="fa-solid fa-box-open text-4xl text-gray-300 mb-3"></i>
+                            <p class="text-gray-400 font-medium">No se encontraron productos.</p>
+                        </div>
                     </div>
                 </section>
 

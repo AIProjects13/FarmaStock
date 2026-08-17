@@ -52,23 +52,8 @@ body.role-viewer .admin-only { display: none !important; }
 .modal-content { transform: scale(0.96) translateY(8px); transition: transform 0.25s; }
 .modal-bg.open .modal-content { transform: scale(1) translateY(0); }
 
-/* ---------- Product cards ---------- */
-.product-card {
-    background: #FFFFFF; border: 1px solid #EEF2F7; border-radius: 1rem;
-    transition: transform 0.2s, box-shadow 0.2s; overflow: hidden;
-}
-.product-card:hover { transform: translateY(-3px); box-shadow: 0 16px 30px -18px rgba(18, 32, 58, 0.25); }
-
-.product-thumb {
-    width: 100%; aspect-ratio: 4/3; object-fit: cover; background: #F1F5F9;
-}
-.product-thumb-placeholder {
-    width: 100%; aspect-ratio: 4/3; display: flex; align-items: center; justify-content: center;
-    background: linear-gradient(135deg, #EAF1FF 0%, #F4F6F9 100%); color: #94A3B8; font-size: 2.2rem;
-}
-
 /* ---------- Badges ---------- */
-.badge { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.68rem; font-weight: 700; padding: 0.22rem 0.55rem; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.02em; }
+.badge { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.68rem; font-weight: 700; padding: 0.22rem 0.55rem; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.02em; white-space: nowrap; }
 .badge-green { background: #DCFCE7; color: #15803D; }
 .badge-amber { background: #FEF3C7; color: #B45309; }
 .badge-red { background: #FEE2E2; color: #DC2626; }

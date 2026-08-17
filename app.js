@@ -306,6 +306,35 @@ window.quitarImagenProducto = (e) => {
     mostrarPreviewImagen('');
 };
 
+// La foto NO viaja en el listado general (con muchos productos sobrecargaría
+// el navegador); se pide sola, bajo demanda, solo cuando abres ese producto.
+async function fetchImagenProducto(id) {
+    const token = await auth.currentUser.getIdToken();
+    const res = await fetch(`${SCRIPT_URL}?action=getImagen&id=${encodeURIComponent(id)}&token=${encodeURIComponent(token)}`);
+    const json = await res.json();
+    if (json.status !== 'success') throw new Error(json.message || 'No se pudo cargar la foto');
+    return json.imagen || '';
+}
+
+function setImagenCargando(loading) {
+    const icon = document.getElementById('prd-imagen-icon');
+    const hint = document.getElementById('prd-imagen-hint');
+    const guardarBtn = document.getElementById('prd-btn-guardar');
+    const fileInput = document.getElementById('prd-imagen-input');
+
+    if (loading) {
+        icon.className = 'fa-solid fa-spinner fa-spin text-2xl text-gray-300 mb-2';
+        icon.classList.remove('hidden');
+        hint.innerText = 'Cargando foto…';
+        guardarBtn.disabled = true;
+        fileInput.disabled = true;
+    } else {
+        icon.className = 'fa-solid fa-image text-2xl text-gray-300 mb-2';
+        guardarBtn.disabled = false;
+        fileInput.disabled = false;
+    }
+}
+
 async function manejarArchivoImagen(file) {
     if (!file || !file.type.startsWith('image/')) return;
     try {
@@ -357,7 +386,7 @@ window.openNewProducto = () => {
     openModal('mod-producto');
 };
 
-window.openEditProducto = (id) => {
+window.openEditProducto = async (id) => {
     const p = DB.Productos.find(x => String(x.ID_Producto) === String(id));
     if (!p) return;
     resetFormProducto();
@@ -370,7 +399,6 @@ window.openEditProducto = (id) => {
     document.getElementById('prd-proveedor').value = p.Proveedor || '';
     document.getElementById('prd-proveedor-tel').value = p.Proveedor_Telefono || '';
     document.getElementById('prd-vencimiento').value = p.Fecha_Vencimiento || '';
-    if (p.Imagen_Base64) mostrarPreviewImagen(p.Imagen_Base64);
 
     document.getElementById('prd-cantidad-wrap').classList.add('hidden');
     document.getElementById('prd-existencias-wrap').classList.remove('hidden');
@@ -379,6 +407,19 @@ window.openEditProducto = (id) => {
     document.getElementById('prd-btn-eliminar').classList.toggle('hidden', userRole !== 'admin');
     calcMargen();
     openModal('mod-producto');
+
+    if (p.Tiene_Imagen) {
+        setImagenCargando(true);
+        try {
+            const imagen = await fetchImagenProducto(id);
+            mostrarPreviewImagen(imagen);
+        } catch (e) {
+            console.error(e);
+            showToast('No se pudo cargar la foto del producto.', 'error');
+        } finally {
+            setImagenCargando(false);
+        }
+    }
 };
 
 window.saveProducto = async () => {
@@ -598,7 +639,7 @@ function escapeHtml(str) {
 
 window.renderInventario = () => {
     const term = (document.getElementById('inv-search').value || '').toLowerCase().trim();
-    const grid = document.getElementById('inv-grid');
+    const tbody = document.getElementById('inv-tbody');
     const empty = document.getElementById('inv-empty');
 
     const productos = (DB.Productos || []).filter(p => {
@@ -606,41 +647,36 @@ window.renderInventario = () => {
         return (p.Nombre || '').toLowerCase().includes(term) || (p.Proveedor || '').toLowerCase().includes(term);
     }).sort((a, b) => (a.Nombre || '').localeCompare(b.Nombre || ''));
 
-    grid.innerHTML = '';
+    tbody.innerHTML = '';
     empty.classList.toggle('hidden', productos.length > 0);
 
     productos.forEach(p => {
-        const thumb = p.Imagen_Base64
-            ? `<img src="${p.Imagen_Base64}" class="product-thumb" alt="${escapeHtml(p.Nombre || '')}">`
-            : `<div class="product-thumb-placeholder"><i class="fa-solid fa-box"></i></div>`;
-
-        grid.insertAdjacentHTML('beforeend', `
-            <div class="product-card animate-fade">
-                ${thumb}
-                <div class="p-4">
-                    <div class="flex items-start justify-between gap-2 mb-2">
-                        <h4 class="font-bold text-primary leading-tight">${escapeHtml(p.Nombre || '')}</h4>
+        const vencimiento = badgeVencimiento(p);
+        tbody.insertAdjacentHTML('beforeend', `
+            <tr class="hover:bg-gray-50">
+                <td class="px-4 py-3">
+                    <div class="flex items-center gap-3 min-w-[180px]">
+                        <div class="w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center shrink-0 ${p.Tiene_Imagen ? 'text-accent' : 'text-gray-300'}" title="${p.Tiene_Imagen ? 'Tiene foto' : 'Sin foto'}">
+                            <i class="fa-solid ${p.Tiene_Imagen ? 'fa-image' : 'fa-box'}"></i>
+                        </div>
+                        <div class="min-w-0">
+                            <p class="font-bold text-primary truncate">${escapeHtml(p.Nombre || '')}</p>
+                            ${p.Proveedor ? `<p class="text-xs text-gray-400 truncate"><i class="fa-solid fa-truck-fast mr-1"></i>${escapeHtml(p.Proveedor)}${p.Proveedor_Telefono ? ' · ' + escapeHtml(p.Proveedor_Telefono) : ''}</p>` : ''}
+                        </div>
                     </div>
-                    <div class="flex flex-wrap gap-1.5 mb-3">
-                        ${badgeStock(p)}
-                        ${badgeVencimiento(p)}
+                </td>
+                <td class="px-4 py-3 text-right">${badgeStock(p)}</td>
+                <td class="px-4 py-3">${vencimiento || '<span class="text-gray-300">—</span>'}</td>
+                <td class="px-4 py-3 text-right font-semibold text-primary whitespace-nowrap">${fmtMoney(p.Costo)}</td>
+                <td class="px-4 py-3 text-right font-bold text-accent whitespace-nowrap">${fmtMoney(p.Precio_Venta)}</td>
+                <td class="px-4 py-3">
+                    <div class="flex items-center justify-end gap-1.5">
+                        <button onclick="openMovimientoModal('${p.ID_Producto}')" class="admin-only w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 text-primary flex items-center justify-center" title="Movimiento"><i class="fa-solid fa-right-left text-xs"></i></button>
+                        <button onclick="verHistorialProducto('${p.ID_Producto}')" class="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 text-primary flex items-center justify-center" title="Historial"><i class="fa-solid fa-clock-rotate-left text-xs"></i></button>
+                        <button onclick="openEditProducto('${p.ID_Producto}')" class="admin-only w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 text-primary flex items-center justify-center" title="Editar"><i class="fa-solid fa-pen text-xs"></i></button>
                     </div>
-                    <div class="flex items-center justify-between text-sm mb-1">
-                        <span class="text-gray-400">Costo</span>
-                        <span class="font-semibold text-primary">${fmtMoney(p.Costo)}</span>
-                    </div>
-                    <div class="flex items-center justify-between text-sm mb-3">
-                        <span class="text-gray-400">Precio venta</span>
-                        <span class="font-bold text-accent">${fmtMoney(p.Precio_Venta)}</span>
-                    </div>
-                    ${p.Proveedor ? `<p class="text-xs text-gray-400 mb-3 truncate"><i class="fa-solid fa-truck-fast mr-1"></i>${escapeHtml(p.Proveedor)}${p.Proveedor_Telefono ? ' · ' + escapeHtml(p.Proveedor_Telefono) : ''}</p>` : ''}
-                    <div class="flex items-center gap-2 pt-2 border-t border-gray-100">
-                        <button onclick="openMovimientoModal('${p.ID_Producto}')" class="admin-only flex-1 btn-ghost !py-2 text-xs flex items-center justify-center gap-1"><i class="fa-solid fa-right-left"></i>Movimiento</button>
-                        <button onclick="verHistorialProducto('${p.ID_Producto}')" class="w-9 h-9 shrink-0 rounded-lg bg-gray-100 hover:bg-gray-200 text-primary flex items-center justify-center" title="Historial"><i class="fa-solid fa-clock-rotate-left text-sm"></i></button>
-                        <button onclick="openEditProducto('${p.ID_Producto}')" class="admin-only w-9 h-9 shrink-0 rounded-lg bg-gray-100 hover:bg-gray-200 text-primary flex items-center justify-center" title="Editar"><i class="fa-solid fa-pen text-sm"></i></button>
-                    </div>
-                </div>
-            </div>
+                </td>
+            </tr>
         `);
     });
 };
