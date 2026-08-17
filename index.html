@@ -97,7 +97,7 @@
                         <i class="fa-solid fa-boxes-stacked w-4"></i> Inventario
                     </a>
                     <a href="#" data-target="tab-hist" class="nav-btn flex items-center gap-3 px-4 py-3 text-gray-300 hover:text-primary hover:bg-accent rounded-xl transition-colors font-medium">
-                        <i class="fa-solid fa-clock-rotate-left w-4"></i> Reabastecimiento
+                        <i class="fa-solid fa-clock-rotate-left w-4"></i> Movimientos
                     </a>
                 </nav>
             </div>
@@ -132,7 +132,7 @@
 
                 <!-- DASHBOARD -->
                 <section id="tab-dash" class="tab-view animate-fade">
-                    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                    <div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
                         <div class="kpi-card">
                             <div class="kpi-icon bg-blue-50 text-blue-600 mb-3"><i class="fa-solid fa-boxes-stacked"></i></div>
                             <p class="text-xs font-bold text-gray-400 uppercase">Productos</p>
@@ -144,6 +144,11 @@
                             <p class="text-2xl md:text-3xl font-black text-primary" id="kpi-sin-stock">0</p>
                         </div>
                         <div class="kpi-card">
+                            <div class="kpi-icon bg-orange-50 text-orange-500 mb-3"><i class="fa-solid fa-battery-quarter"></i></div>
+                            <p class="text-xs font-bold text-gray-400 uppercase">Stock bajo</p>
+                            <p class="text-2xl md:text-3xl font-black text-primary" id="kpi-stock-bajo">0</p>
+                        </div>
+                        <div class="kpi-card">
                             <div class="kpi-icon bg-amber-50 text-amber-500 mb-3"><i class="fa-solid fa-hourglass-half"></i></div>
                             <p class="text-xs font-bold text-gray-400 uppercase">Por vencer (30d)</p>
                             <p class="text-2xl md:text-3xl font-black text-primary" id="kpi-por-vencer">0</p>
@@ -151,21 +156,25 @@
                         <div class="kpi-card">
                             <div class="kpi-icon bg-emerald-50 text-emerald-600 mb-3"><i class="fa-solid fa-sack-dollar"></i></div>
                             <p class="text-xs font-bold text-gray-400 uppercase">Valor de venta potencial</p>
-                            <p class="text-xl md:text-2xl font-black text-primary truncate" id="kpi-valor-venta">$0.00</p>
+                            <p class="text-xl md:text-2xl font-black text-primary truncate" id="kpi-valor-venta">Q0.00</p>
                         </div>
                     </div>
 
                     <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                        <div class="lg:col-span-2 bg-white rounded-xl border border-gray-100 p-5">
-                            <div class="flex items-center justify-between mb-4">
-                                <h3 class="font-bold text-primary"><i class="fa-solid fa-triangle-exclamation text-amber-500 mr-2"></i>Alertas de vencimiento</h3>
-                            </div>
+                        <div class="bg-white rounded-xl border border-gray-100 p-5">
+                            <h3 class="font-bold text-primary mb-4"><i class="fa-solid fa-triangle-exclamation text-amber-500 mr-2"></i>Alertas de vencimiento</h3>
                             <div id="dash-vencimientos" class="space-y-2"></div>
                             <p id="dash-vencimientos-empty" class="text-sm text-gray-400 text-center py-6 hidden">No hay productos por vencer en los próximos 30 días.</p>
                         </div>
 
                         <div class="bg-white rounded-xl border border-gray-100 p-5">
-                            <h3 class="font-bold text-primary mb-4"><i class="fa-solid fa-clock-rotate-left text-accent mr-2"></i>Últimos reabastecimientos</h3>
+                            <h3 class="font-bold text-primary mb-4"><i class="fa-solid fa-battery-quarter text-orange-500 mr-2"></i>Stock por agotarse</h3>
+                            <div id="dash-stock-bajo" class="space-y-2"></div>
+                            <p id="dash-stock-bajo-empty" class="text-sm text-gray-400 text-center py-6 hidden">Todo el inventario está por encima de su mínimo.</p>
+                        </div>
+
+                        <div class="bg-white rounded-xl border border-gray-100 p-5">
+                            <h3 class="font-bold text-primary mb-4"><i class="fa-solid fa-clock-rotate-left text-accent mr-2"></i>Últimos movimientos</h3>
                             <div id="dash-recientes" class="space-y-3"></div>
                             <p id="dash-recientes-empty" class="text-sm text-gray-400 text-center py-6 hidden">Todavía no hay movimientos.</p>
                         </div>
@@ -204,8 +213,9 @@
                                     <tr>
                                         <th class="text-left px-4 py-3">Fecha</th>
                                         <th class="text-left px-4 py-3">Producto</th>
+                                        <th class="text-left px-4 py-3">Tipo</th>
                                         <th class="text-right px-4 py-3">Cantidad</th>
-                                        <th class="text-left px-4 py-3">Proveedor</th>
+                                        <th class="text-left px-4 py-3">Proveedor / Motivo</th>
                                         <th class="text-right px-4 py-3">Costo unitario</th>
                                         <th class="text-left px-4 py-3">Usuario</th>
                                         <th class="text-left px-4 py-3">Notas</th>
@@ -214,7 +224,7 @@
                                 <tbody id="hist-tbody" class="divide-y divide-gray-100"></tbody>
                             </table>
                         </div>
-                        <p id="hist-empty" class="hidden text-center text-gray-400 py-16">Aún no hay reabastecimientos registrados.</p>
+                        <p id="hist-empty" class="hidden text-center text-gray-400 py-16">Aún no hay movimientos registrados.</p>
                     </div>
                 </section>
 
@@ -268,7 +278,11 @@
                     <div id="prd-existencias-wrap" class="hidden">
                         <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Existencias actuales</label>
                         <input type="number" id="prd-existencias" class="input-base" disabled>
-                        <p class="text-[10px] text-gray-400 mt-1">Se actualiza desde "Reabastecer"</p>
+                        <p class="text-[10px] text-gray-400 mt-1">Se actualiza desde "Movimiento"</p>
+                    </div>
+                    <div class="col-span-2">
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Stock mínimo para alerta <span class="normal-case font-normal text-gray-400">(opcional, por defecto 5)</span></label>
+                        <input type="number" min="0" id="prd-stock-minimo" class="input-base" placeholder="5">
                     </div>
                     <div class="col-span-2">
                         <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Proveedor <span class="normal-case font-normal text-gray-400">(opcional)</span></label>
@@ -291,42 +305,63 @@
         </div>
     </div>
 
-    <!-- MODAL REABASTECER -->
-    <div id="mod-reabastecer" class="fixed inset-0 modal-bg z-[60] flex items-center justify-center p-4">
+    <!-- MODAL MOVIMIENTO DE STOCK -->
+    <div id="mod-movimiento" class="fixed inset-0 modal-bg z-[60] flex items-center justify-center p-4">
         <div class="bg-white rounded-2xl w-full max-w-md modal-content shadow-2xl overflow-hidden flex flex-col">
             <div class="p-5 border-b border-gray-200 flex justify-between items-center bg-gray-50">
-                <h3 class="font-bold text-primary text-lg"><i class="fa-solid fa-box-open mr-2"></i>Reabastecer stock</h3>
-                <button onclick="closeModal('mod-reabastecer')" class="text-gray-400 hover:text-red-500 transition"><i class="fa-solid fa-xmark text-xl"></i></button>
+                <h3 class="font-bold text-primary text-lg"><i class="fa-solid fa-right-left mr-2"></i>Movimiento de stock</h3>
+                <button onclick="closeModal('mod-movimiento')" class="text-gray-400 hover:text-red-500 transition"><i class="fa-solid fa-xmark text-xl"></i></button>
             </div>
             <div class="p-5 space-y-4">
-                <input type="hidden" id="rst-id-producto">
+                <input type="hidden" id="mov-id-producto">
+                <input type="hidden" id="mov-tipo" value="Entrada">
+
+                <div class="grid grid-cols-2 gap-2 bg-gray-100 p-1 rounded-xl">
+                    <button type="button" id="mov-tab-entrada" onclick="setMovimientoTipo('Entrada')" class="py-2 rounded-lg text-sm font-bold transition"><i class="fa-solid fa-box-open mr-1"></i>Entrada</button>
+                    <button type="button" id="mov-tab-salida" onclick="setMovimientoTipo('Salida')" class="py-2 rounded-lg text-sm font-bold transition"><i class="fa-solid fa-arrow-right-from-bracket mr-1"></i>Salida</button>
+                </div>
+
                 <div class="bg-gray-50 rounded-lg p-3 border border-gray-200">
                     <p class="text-xs text-gray-400 font-bold uppercase">Producto</p>
-                    <p class="font-bold text-primary" id="rst-nombre-producto">—</p>
-                    <p class="text-xs text-gray-400 mt-1">Existencias actuales: <span id="rst-existencias-actuales" class="font-bold text-primary">0</span></p>
+                    <p class="font-bold text-primary" id="mov-nombre-producto">—</p>
+                    <p class="text-xs text-gray-400 mt-1">Existencias actuales: <span id="mov-existencias-actuales" class="font-bold text-primary">0</span></p>
                 </div>
                 <div>
-                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Cantidad a agregar *</label>
-                    <input type="number" min="1" id="rst-cantidad" class="input-base" required>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1" id="mov-cantidad-label">Cantidad a agregar *</label>
+                    <input type="number" min="1" id="mov-cantidad" class="input-base" required>
                 </div>
-                <div class="grid grid-cols-2 gap-3">
+
+                <div id="mov-campos-entrada" class="grid grid-cols-2 gap-3">
                     <div>
                         <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Costo unitario <span class="normal-case font-normal text-gray-400">(opc.)</span></label>
-                        <input type="number" step="0.01" min="0" id="rst-costo-unitario" class="input-base">
+                        <input type="number" step="0.01" min="0" id="mov-costo-unitario" class="input-base">
                     </div>
                     <div>
                         <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Proveedor <span class="normal-case font-normal text-gray-400">(opc.)</span></label>
-                        <input type="text" id="rst-proveedor" class="input-base">
+                        <input type="text" id="mov-proveedor" class="input-base">
                     </div>
                 </div>
+
+                <div id="mov-campos-salida" class="hidden">
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Motivo</label>
+                    <select id="mov-motivo" class="input-base bg-white">
+                        <option value="Consumo interno">Consumo interno</option>
+                        <option value="Vencido">Producto vencido</option>
+                        <option value="Dañado">Dañado / pérdida</option>
+                        <option value="Ajuste de inventario">Ajuste de inventario</option>
+                        <option value="Otro">Otro</option>
+                    </select>
+                </div>
+
                 <div>
                     <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Notas <span class="normal-case font-normal text-gray-400">(opc.)</span></label>
-                    <textarea id="rst-notas" class="input-base h-16 resize-none"></textarea>
+                    <textarea id="mov-notas" class="input-base h-16 resize-none"></textarea>
                 </div>
+                <p class="text-[11px] text-gray-400"><i class="fa-solid fa-user-clock mr-1"></i>Se guardará con tu usuario y la fecha/hora actual.</p>
             </div>
             <div class="p-5 border-t border-gray-200 flex gap-2">
-                <button type="button" onclick="closeModal('mod-reabastecer')" class="flex-1 btn-ghost">Cancelar</button>
-                <button type="button" onclick="saveRestock()" class="flex-1 btn-accent"><i class="fa-solid fa-check mr-2"></i>Confirmar</button>
+                <button type="button" onclick="closeModal('mod-movimiento')" class="flex-1 btn-ghost">Cancelar</button>
+                <button type="button" onclick="saveMovimiento()" class="flex-1 btn-accent" id="mov-btn-guardar"><i class="fa-solid fa-check mr-2"></i>Confirmar</button>
             </div>
         </div>
     </div>
@@ -340,7 +375,7 @@
             </div>
             <div class="p-5 overflow-y-auto">
                 <div id="hist-prod-list" class="space-y-3"></div>
-                <p id="hist-prod-empty" class="hidden text-center text-gray-400 py-10">Este producto no tiene reabastecimientos aún.</p>
+                <p id="hist-prod-empty" class="hidden text-center text-gray-400 py-10">Este producto no tiene movimientos aún.</p>
             </div>
         </div>
     </div>

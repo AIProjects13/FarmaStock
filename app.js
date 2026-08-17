@@ -34,11 +34,12 @@ const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxCbsraiRWveHgUR9GuH
 // ---------------------------------------------------------------
 // ESTADO GLOBAL
 // ---------------------------------------------------------------
-let DB = { Productos: [], Historial_Reabastecimiento: [] };
+let DB = { Productos: [], Historial_Movimientos: [] };
 let currentUser = null;
 let userRole = null; // 'admin' | 'viewer'
 let activeTab = 'tab-dash';
 const IMAGEN_LIMITE_CHARS = 40000;
+const DEFAULT_STOCK_MINIMO = 5;
 
 window.addEventListener('error', (event) => {
     console.error("Global Error:", event.error);
@@ -86,7 +87,8 @@ const setLoader = (visible) => {
     document.getElementById('global-loader').style.display = visible ? 'flex' : 'none';
 };
 
-const fmtMoney = (n) => `$${(Number(n) || 0).toFixed(2)}`;
+const fmtMoney = (n) => `Q${(Number(n) || 0).toFixed(2)}`;
+const stockMinimo = (p) => (p.Stock_Minimo !== undefined && p.Stock_Minimo !== '' && p.Stock_Minimo !== null) ? Number(p.Stock_Minimo) : DEFAULT_STOCK_MINIMO;
 const fmtDate = (s) => {
     if (!s) return '—';
     const d = new Date(s + 'T00:00:00');
@@ -227,7 +229,7 @@ window.syncData = async () => {
         const json = await res.json();
         if (json.status === 'error') throw new Error(json.message);
         DB.Productos = json.data.Productos || [];
-        DB.Historial_Reabastecimiento = json.data.Historial_Reabastecimiento || [];
+        DB.Historial_Movimientos = json.data.Historial_Movimientos || [];
         renderDashboard();
         renderInventario();
         renderHistorial();
@@ -338,6 +340,7 @@ function resetFormProducto() {
     document.getElementById('prd-precio').value = '';
     document.getElementById('prd-cantidad-inicial').value = 0;
     document.getElementById('prd-existencias').value = '';
+    document.getElementById('prd-stock-minimo').value = '';
     document.getElementById('prd-proveedor').value = '';
     document.getElementById('prd-proveedor-tel').value = '';
     document.getElementById('prd-vencimiento').value = '';
@@ -363,6 +366,7 @@ window.openEditProducto = (id) => {
     document.getElementById('prd-nombre').value = p.Nombre || '';
     document.getElementById('prd-costo').value = p.Costo || 0;
     document.getElementById('prd-precio').value = p.Precio_Venta || 0;
+    document.getElementById('prd-stock-minimo').value = p.Stock_Minimo || '';
     document.getElementById('prd-proveedor').value = p.Proveedor || '';
     document.getElementById('prd-proveedor-tel').value = p.Proveedor_Telefono || '';
     document.getElementById('prd-vencimiento').value = p.Fecha_Vencimiento || '';
@@ -391,10 +395,12 @@ window.saveProducto = async () => {
 
     // El backend reescribe la fila completa, así que hay que reenviar
     // también los campos que no están en este formulario (existencias, etc.)
+    const stockMinimoVal = document.getElementById('prd-stock-minimo').value;
     const rowData = {
         Nombre: nombre,
         Costo: Number(costo),
         Precio_Venta: Number(precio),
+        Stock_Minimo: stockMinimoVal === '' ? '' : Number(stockMinimoVal),
         Proveedor: document.getElementById('prd-proveedor').value.trim(),
         Proveedor_Telefono: document.getElementById('prd-proveedor-tel').value.trim(),
         Fecha_Vencimiento: document.getElementById('prd-vencimiento').value,
@@ -460,51 +466,98 @@ window.executeDeleteProducto = async () => {
 };
 
 // ---------------------------------------------------------------
-// REABASTECIMIENTO
+// MOVIMIENTO DE STOCK (entradas de reabastecimiento / salidas de consumo)
 // ---------------------------------------------------------------
-window.openRestockModal = (id) => {
-    const p = DB.Productos.find(x => String(x.ID_Producto) === String(id));
-    if (!p) return;
-    document.getElementById('rst-id-producto').value = id;
-    document.getElementById('rst-nombre-producto').innerText = p.Nombre;
-    document.getElementById('rst-existencias-actuales').innerText = p.Existencias || 0;
-    document.getElementById('rst-cantidad').value = '';
-    document.getElementById('rst-costo-unitario').value = p.Costo || '';
-    document.getElementById('rst-proveedor').value = p.Proveedor || '';
-    document.getElementById('rst-notas').value = '';
-    openModal('mod-reabastecer');
+window.setMovimientoTipo = (tipo) => {
+    document.getElementById('mov-tipo').value = tipo;
+    const tabEntrada = document.getElementById('mov-tab-entrada');
+    const tabSalida = document.getElementById('mov-tab-salida');
+    const esEntrada = tipo === 'Entrada';
+
+    tabEntrada.className = 'py-2 rounded-lg text-sm font-bold transition ' + (esEntrada ? 'bg-white shadow text-primary' : 'text-gray-400');
+    tabSalida.className = 'py-2 rounded-lg text-sm font-bold transition ' + (!esEntrada ? 'bg-white shadow text-red-500' : 'text-gray-400');
+
+    document.getElementById('mov-campos-entrada').classList.toggle('hidden', !esEntrada);
+    document.getElementById('mov-campos-salida').classList.toggle('hidden', esEntrada);
+    document.getElementById('mov-cantidad-label').innerText = esEntrada ? 'Cantidad a agregar *' : 'Cantidad a descontar *';
+
+    const btn = document.getElementById('mov-btn-guardar');
+    btn.className = esEntrada ? 'flex-1 btn-accent' : 'flex-1 btn-danger !bg-red-500 !text-white !border-red-500';
 };
 
-window.saveRestock = async () => {
-    const idProducto = document.getElementById('rst-id-producto').value;
-    const cantidad = Number(document.getElementById('rst-cantidad').value);
+window.openMovimientoModal = (id) => {
+    const p = DB.Productos.find(x => String(x.ID_Producto) === String(id));
+    if (!p) return;
+    document.getElementById('mov-id-producto').value = id;
+    document.getElementById('mov-nombre-producto').innerText = p.Nombre;
+    document.getElementById('mov-existencias-actuales').innerText = p.Existencias || 0;
+    document.getElementById('mov-cantidad').value = '';
+    document.getElementById('mov-costo-unitario').value = p.Costo || '';
+    document.getElementById('mov-proveedor').value = p.Proveedor || '';
+    document.getElementById('mov-motivo').value = 'Consumo interno';
+    document.getElementById('mov-notas').value = '';
+    setMovimientoTipo('Entrada');
+    openModal('mod-movimiento');
+};
+
+window.saveMovimiento = async () => {
+    const idProducto = document.getElementById('mov-id-producto').value;
+    const tipo = document.getElementById('mov-tipo').value;
+    const cantidad = Number(document.getElementById('mov-cantidad').value);
     if (!cantidad || cantidad <= 0) {
         showToast('Ingresa una cantidad válida.', 'error');
         return;
     }
 
+    const btn = document.getElementById('mov-btn-guardar');
+    btn.disabled = true;
+
     try {
-        await apiCall('restock', {
+        await apiCall('movimiento', {
             idProducto,
+            tipo,
             cantidad,
-            costoUnitario: document.getElementById('rst-costo-unitario').value,
-            proveedor: document.getElementById('rst-proveedor').value.trim(),
-            notas: document.getElementById('rst-notas').value.trim()
+            costoUnitario: tipo === 'Entrada' ? document.getElementById('mov-costo-unitario').value : '',
+            proveedor: tipo === 'Entrada' ? document.getElementById('mov-proveedor').value.trim() : '',
+            motivo: tipo === 'Salida' ? document.getElementById('mov-motivo').value : '',
+            notas: document.getElementById('mov-notas').value.trim()
         });
-        closeModal('mod-reabastecer');
-        showToast('Stock actualizado correctamente.');
+        closeModal('mod-movimiento');
+        showToast(tipo === 'Entrada' ? 'Entrada registrada correctamente.' : 'Salida registrada correctamente.');
         await syncData();
     } catch (e) {
         console.error(e);
+    } finally {
+        btn.disabled = false;
     }
 };
+
+function itemHistorialHtml(r) {
+    const esEntrada = r.Tipo !== 'Salida';
+    const detalle = esEntrada ? (r.Proveedor || '') : (r.Motivo || '');
+    return `
+        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100">
+            <div class="flex items-center gap-3 min-w-0">
+                <div class="w-8 h-8 rounded-lg shrink-0 flex items-center justify-center ${esEntrada ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'}">
+                    <i class="fa-solid ${esEntrada ? 'fa-arrow-down' : 'fa-arrow-up'} text-xs"></i>
+                </div>
+                <div class="min-w-0">
+                    <p class="text-sm font-bold text-primary">${esEntrada ? '+' : '-'}${r.Cantidad} unidades</p>
+                    <p class="text-xs text-gray-400 truncate">${r.Fecha || ''} ${detalle ? '· ' + escapeHtml(detalle) : ''}</p>
+                    ${r.Notas ? `<p class="text-xs text-gray-500 mt-1">${escapeHtml(r.Notas)}</p>` : ''}
+                </div>
+            </div>
+            <span class="text-xs font-semibold text-gray-400 shrink-0">${r.Usuario || ''}</span>
+        </div>
+    `;
+}
 
 window.verHistorialProducto = (id) => {
     const p = DB.Productos.find(x => String(x.ID_Producto) === String(id));
     if (!p) return;
     document.getElementById('hist-prod-title').innerText = `Historial — ${p.Nombre}`;
 
-    const registros = (DB.Historial_Reabastecimiento || [])
+    const registros = (DB.Historial_Movimientos || [])
         .filter(r => String(r.ID_Producto) === String(id))
         .sort((a, b) => (b.Fecha || '').localeCompare(a.Fecha || ''));
 
@@ -513,18 +566,7 @@ window.verHistorialProducto = (id) => {
     list.innerHTML = '';
     empty.classList.toggle('hidden', registros.length > 0);
 
-    registros.forEach(r => {
-        list.insertAdjacentHTML('beforeend', `
-            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100">
-                <div>
-                    <p class="text-sm font-bold text-primary">+${r.Cantidad} unidades</p>
-                    <p class="text-xs text-gray-400">${r.Fecha || ''} ${r.Proveedor ? '· ' + r.Proveedor : ''}</p>
-                    ${r.Notas ? `<p class="text-xs text-gray-500 mt-1">${escapeHtml(r.Notas)}</p>` : ''}
-                </div>
-                <span class="text-xs font-semibold text-gray-400">${r.Usuario || ''}</span>
-            </div>
-        `);
-    });
+    registros.forEach(r => list.insertAdjacentHTML('beforeend', itemHistorialHtml(r)));
 
     openModal('mod-historial-producto');
 };
@@ -535,6 +577,7 @@ window.verHistorialProducto = (id) => {
 function badgeStock(p) {
     const existencias = Number(p.Existencias) || 0;
     if (existencias <= 0) return `<span class="badge badge-red"><i class="fa-solid fa-circle-xmark"></i>Sin stock</span>`;
+    if (existencias <= stockMinimo(p)) return `<span class="badge badge-amber"><i class="fa-solid fa-battery-quarter"></i>${existencias} — stock bajo</span>`;
     return `<span class="badge badge-green"><i class="fa-solid fa-circle-check"></i>${existencias} en stock</span>`;
 }
 
@@ -592,7 +635,7 @@ window.renderInventario = () => {
                     </div>
                     ${p.Proveedor ? `<p class="text-xs text-gray-400 mb-3 truncate"><i class="fa-solid fa-truck-fast mr-1"></i>${escapeHtml(p.Proveedor)}${p.Proveedor_Telefono ? ' · ' + escapeHtml(p.Proveedor_Telefono) : ''}</p>` : ''}
                     <div class="flex items-center gap-2 pt-2 border-t border-gray-100">
-                        <button onclick="openRestockModal('${p.ID_Producto}')" class="admin-only flex-1 btn-ghost !py-2 text-xs flex items-center justify-center gap-1"><i class="fa-solid fa-box-open"></i>Reabastecer</button>
+                        <button onclick="openMovimientoModal('${p.ID_Producto}')" class="admin-only flex-1 btn-ghost !py-2 text-xs flex items-center justify-center gap-1"><i class="fa-solid fa-right-left"></i>Movimiento</button>
                         <button onclick="verHistorialProducto('${p.ID_Producto}')" class="w-9 h-9 shrink-0 rounded-lg bg-gray-100 hover:bg-gray-200 text-primary flex items-center justify-center" title="Historial"><i class="fa-solid fa-clock-rotate-left text-sm"></i></button>
                         <button onclick="openEditProducto('${p.ID_Producto}')" class="admin-only w-9 h-9 shrink-0 rounded-lg bg-gray-100 hover:bg-gray-200 text-primary flex items-center justify-center" title="Editar"><i class="fa-solid fa-pen text-sm"></i></button>
                     </div>
@@ -608,6 +651,9 @@ window.renderInventario = () => {
 window.renderDashboard = () => {
     const productos = DB.Productos || [];
     const sinStock = productos.filter(p => (Number(p.Existencias) || 0) <= 0);
+    const stockBajo = productos
+        .filter(p => { const e = Number(p.Existencias) || 0; return e > 0 && e <= stockMinimo(p); })
+        .sort((a, b) => (Number(a.Existencias) || 0) - (Number(b.Existencias) || 0));
     const porVencer = productos
         .filter(p => p.Fecha_Vencimiento && daysUntil(p.Fecha_Vencimiento) !== null && daysUntil(p.Fecha_Vencimiento) <= 30)
         .sort((a, b) => daysUntil(a.Fecha_Vencimiento) - daysUntil(b.Fecha_Vencimiento));
@@ -615,6 +661,7 @@ window.renderDashboard = () => {
 
     document.getElementById('kpi-total-productos').innerText = productos.length;
     document.getElementById('kpi-sin-stock').innerText = sinStock.length;
+    document.getElementById('kpi-stock-bajo').innerText = stockBajo.length;
     document.getElementById('kpi-por-vencer').innerText = porVencer.length;
     document.getElementById('kpi-valor-venta').innerText = fmtMoney(valorVenta);
 
@@ -626,10 +673,10 @@ window.renderDashboard = () => {
         const dias = daysUntil(p.Fecha_Vencimiento);
         vencWrap.insertAdjacentHTML('beforeend', `
             <div class="flex items-center justify-between p-3 rounded-lg border border-gray-100 hover:bg-gray-50">
-                <div class="flex items-center gap-3">
-                    <div class="w-9 h-9 rounded-lg bg-amber-50 text-amber-500 flex items-center justify-center"><i class="fa-solid fa-box"></i></div>
-                    <div>
-                        <p class="text-sm font-bold text-primary">${escapeHtml(p.Nombre || '')}</p>
+                <div class="flex items-center gap-3 min-w-0">
+                    <div class="w-9 h-9 rounded-lg bg-amber-50 text-amber-500 flex items-center justify-center shrink-0"><i class="fa-solid fa-box"></i></div>
+                    <div class="min-w-0">
+                        <p class="text-sm font-bold text-primary truncate">${escapeHtml(p.Nombre || '')}</p>
                         <p class="text-xs text-gray-400">${fmtDate(p.Fecha_Vencimiento)}</p>
                     </div>
                 </div>
@@ -638,19 +685,39 @@ window.renderDashboard = () => {
         `);
     });
 
+    const bajoWrap = document.getElementById('dash-stock-bajo');
+    const bajoEmpty = document.getElementById('dash-stock-bajo-empty');
+    bajoWrap.innerHTML = '';
+    bajoEmpty.classList.toggle('hidden', stockBajo.length > 0);
+    stockBajo.slice(0, 6).forEach(p => {
+        bajoWrap.insertAdjacentHTML('beforeend', `
+            <div class="flex items-center justify-between p-3 rounded-lg border border-gray-100 hover:bg-gray-50">
+                <div class="flex items-center gap-3 min-w-0">
+                    <div class="w-9 h-9 rounded-lg bg-orange-50 text-orange-500 flex items-center justify-center shrink-0"><i class="fa-solid fa-battery-quarter"></i></div>
+                    <div class="min-w-0">
+                        <p class="text-sm font-bold text-primary truncate">${escapeHtml(p.Nombre || '')}</p>
+                        <p class="text-xs text-gray-400">Mínimo: ${stockMinimo(p)}</p>
+                    </div>
+                </div>
+                <span class="badge badge-amber">${p.Existencias || 0}</span>
+            </div>
+        `);
+    });
+
     const recWrap = document.getElementById('dash-recientes');
     const recEmpty = document.getElementById('dash-recientes-empty');
-    const recientes = (DB.Historial_Reabastecimiento || []).slice().sort((a, b) => (b.Fecha || '').localeCompare(a.Fecha || '')).slice(0, 6);
+    const recientes = (DB.Historial_Movimientos || []).slice().sort((a, b) => (b.Fecha || '').localeCompare(a.Fecha || '')).slice(0, 6);
     recWrap.innerHTML = '';
     recEmpty.classList.toggle('hidden', recientes.length > 0);
     recientes.forEach(r => {
+        const esEntrada = r.Tipo !== 'Salida';
         recWrap.insertAdjacentHTML('beforeend', `
             <div class="flex items-center justify-between">
                 <div class="min-w-0">
                     <p class="text-sm font-bold text-primary truncate">${escapeHtml(r.Producto_Nombre || '')}</p>
                     <p class="text-xs text-gray-400">${r.Fecha || ''}</p>
                 </div>
-                <span class="text-sm font-black text-emerald-600 shrink-0">+${r.Cantidad}</span>
+                <span class="text-sm font-black shrink-0 ${esEntrada ? 'text-emerald-600' : 'text-red-500'}">${esEntrada ? '+' : '-'}${r.Cantidad}</span>
             </div>
         `);
     });
@@ -664,21 +731,23 @@ window.renderHistorial = () => {
     const tbody = document.getElementById('hist-tbody');
     const empty = document.getElementById('hist-empty');
 
-    const registros = (DB.Historial_Reabastecimiento || []).filter(r => {
+    const registros = (DB.Historial_Movimientos || []).filter(r => {
         if (!term) return true;
-        return (r.Producto_Nombre || '').toLowerCase().includes(term) || (r.Proveedor || '').toLowerCase().includes(term);
+        return (r.Producto_Nombre || '').toLowerCase().includes(term) || (r.Proveedor || '').toLowerCase().includes(term) || (r.Motivo || '').toLowerCase().includes(term);
     }).sort((a, b) => (b.Fecha || '').localeCompare(a.Fecha || ''));
 
     tbody.innerHTML = '';
     empty.classList.toggle('hidden', registros.length > 0);
 
     registros.forEach(r => {
+        const esEntrada = r.Tipo !== 'Salida';
         tbody.insertAdjacentHTML('beforeend', `
             <tr class="hover:bg-gray-50">
                 <td class="px-4 py-3 text-gray-500 whitespace-nowrap">${r.Fecha || ''}</td>
                 <td class="px-4 py-3 font-semibold text-primary">${escapeHtml(r.Producto_Nombre || '')}</td>
-                <td class="px-4 py-3 text-right font-bold text-emerald-600">+${r.Cantidad}</td>
-                <td class="px-4 py-3 text-gray-500">${escapeHtml(r.Proveedor || '—')}</td>
+                <td class="px-4 py-3">${esEntrada ? '<span class="badge badge-green">Entrada</span>' : '<span class="badge badge-red">Salida</span>'}</td>
+                <td class="px-4 py-3 text-right font-bold ${esEntrada ? 'text-emerald-600' : 'text-red-500'}">${esEntrada ? '+' : '-'}${r.Cantidad}</td>
+                <td class="px-4 py-3 text-gray-500">${escapeHtml((esEntrada ? r.Proveedor : r.Motivo) || '—')}</td>
                 <td class="px-4 py-3 text-right text-gray-500">${r.Costo_Unitario ? fmtMoney(r.Costo_Unitario) : '—'}</td>
                 <td class="px-4 py-3 text-gray-500">${escapeHtml(r.Usuario || '—')}</td>
                 <td class="px-4 py-3 text-gray-400">${escapeHtml(r.Notas || '')}</td>
