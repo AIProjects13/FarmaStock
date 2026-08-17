@@ -316,6 +316,15 @@ async function fetchImagenProducto(id) {
     return json.imagen || '';
 }
 
+// Compatible con las dos formas que puede tener el producto en DB:
+// - Backend actualizado: manda Tiene_Imagen (booleano) y hay que pedir la foto aparte.
+// - Backend desplegado sin actualizar todavía: manda Imagen_Base64 completo en el listado.
+async function resolveImagenProducto(p, id) {
+    if (p.Imagen_Base64) return p.Imagen_Base64;
+    if (!p.Tiene_Imagen) return '';
+    return fetchImagenProducto(id);
+}
+
 function setImagenCargando(loading) {
     const icon = document.getElementById('prd-imagen-icon');
     const hint = document.getElementById('prd-imagen-hint');
@@ -408,10 +417,10 @@ window.openEditProducto = async (id) => {
     calcMargen();
     openModal('mod-producto');
 
-    if (p.Tiene_Imagen) {
+    if (p.Imagen_Base64 || p.Tiene_Imagen) {
         setImagenCargando(true);
         try {
-            const imagen = await fetchImagenProducto(id);
+            const imagen = await resolveImagenProducto(p, id);
             mostrarPreviewImagen(imagen);
         } catch (e) {
             console.error(e);
@@ -526,7 +535,22 @@ window.setMovimientoTipo = (tipo) => {
     btn.className = esEntrada ? 'flex-1 btn-accent' : 'flex-1 btn-danger !bg-red-500 !text-white !border-red-500';
 };
 
-window.openMovimientoModal = (id) => {
+function mostrarImagenMovimiento(dataUrl) {
+    const img = document.getElementById('mov-imagen-preview');
+    const icon = document.getElementById('mov-imagen-icon');
+    if (dataUrl) {
+        img.src = dataUrl;
+        img.classList.remove('hidden');
+        icon.classList.add('hidden');
+    } else {
+        img.classList.add('hidden');
+        img.removeAttribute('src');
+        icon.className = 'fa-solid fa-box text-gray-300';
+        icon.classList.remove('hidden');
+    }
+}
+
+window.openMovimientoModal = async (id) => {
     const p = DB.Productos.find(x => String(x.ID_Producto) === String(id));
     if (!p) return;
     document.getElementById('mov-id-producto').value = id;
@@ -538,7 +562,19 @@ window.openMovimientoModal = (id) => {
     document.getElementById('mov-motivo').value = 'Consumo interno';
     document.getElementById('mov-notas').value = '';
     setMovimientoTipo('Entrada');
+    mostrarImagenMovimiento('');
     openModal('mod-movimiento');
+
+    if (p.Imagen_Base64 || p.Tiene_Imagen) {
+        document.getElementById('mov-imagen-icon').className = 'fa-solid fa-spinner fa-spin text-gray-300';
+        try {
+            const imagen = await resolveImagenProducto(p, id);
+            mostrarImagenMovimiento(imagen);
+        } catch (e) {
+            console.error(e);
+            mostrarImagenMovimiento('');
+        }
+    }
 };
 
 window.saveMovimiento = async () => {
