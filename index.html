@@ -132,7 +132,7 @@
 
                 <!-- DASHBOARD -->
                 <section id="tab-dash" class="tab-view animate-fade">
-                    <div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+                    <div class="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
                         <div class="kpi-card">
                             <div class="kpi-icon bg-blue-50 text-blue-600 mb-3"><i class="fa-solid fa-boxes-stacked"></i></div>
                             <p class="text-xs font-bold text-gray-400 uppercase">Productos</p>
@@ -157,6 +157,11 @@
                             <div class="kpi-icon bg-emerald-50 text-emerald-600 mb-3"><i class="fa-solid fa-sack-dollar"></i></div>
                             <p class="text-xs font-bold text-gray-400 uppercase">Valor de venta potencial</p>
                             <p class="text-xl md:text-2xl font-black text-primary truncate" id="kpi-valor-venta">Q0.00</p>
+                        </div>
+                        <div class="kpi-card">
+                            <div class="kpi-icon bg-cyan-50 text-cyan-600 mb-3"><i class="fa-solid fa-cash-register"></i></div>
+                            <p class="text-xs font-bold text-gray-400 uppercase">Vendido este mes</p>
+                            <p class="text-xl md:text-2xl font-black text-primary truncate" id="kpi-ventas-mes">Q0.00</p>
                         </div>
                     </div>
 
@@ -380,6 +385,7 @@
                 <div id="mov-campos-salida" class="hidden">
                     <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Motivo</label>
                     <select id="mov-motivo" class="input-base bg-white">
+                        <option value="Venta">Venta</option>
                         <option value="Consumo interno">Consumo interno</option>
                         <option value="Vencido">Producto vencido</option>
                         <option value="Dañado">Dañado / pérdida</option>

@@ -638,7 +638,7 @@ window.openMovimientoModal = async (id) => {
     document.getElementById('mov-costo-unitario').value = p.Costo || '';
     document.getElementById('mov-proveedor').value = p.Proveedor || '';
     document.getElementById('mov-vencimiento').value = '';
-    document.getElementById('mov-motivo').value = 'Consumo interno';
+    document.getElementById('mov-motivo').value = 'Venta';
     document.getElementById('mov-notas').value = '';
     setMovimientoTipo('Entrada');
     mostrarImagenMovimiento('');
@@ -816,11 +816,25 @@ window.renderDashboard = () => {
         .sort((a, b) => daysUntil(a.Fecha_Vencimiento) - daysUntil(b.Fecha_Vencimiento));
     const valorVenta = productos.reduce((acc, p) => acc + (Number(p.Precio_Venta) || 0) * (Number(p.Existencias) || 0), 0);
 
+    // Salidas marcadas como "Venta" durante el mes en curso, valoradas al
+    // precio de venta ACTUAL del producto (no se guarda el precio histórico
+    // de cada movimiento, así que es un estimado, no un total de caja real).
+    const hoy = new Date();
+    const prefijoMes = hoy.getFullYear() + '-' + String(hoy.getMonth() + 1).padStart(2, '0');
+    const ventasMes = (DB.Historial_Movimientos || [])
+        .filter(r => r.Tipo === 'Salida' && r.Motivo === 'Venta' && String(r.Fecha || '').startsWith(prefijoMes))
+        .reduce((acc, r) => {
+            const prod = productos.find(p => String(p.ID_Producto) === String(r.ID_Producto));
+            const precio = prod ? Number(prod.Precio_Venta) || 0 : 0;
+            return acc + precio * (Number(r.Cantidad) || 0);
+        }, 0);
+
     document.getElementById('kpi-total-productos').innerText = productos.length;
     document.getElementById('kpi-sin-stock').innerText = sinStock.length;
     document.getElementById('kpi-stock-bajo').innerText = stockBajo.length;
     document.getElementById('kpi-por-vencer').innerText = porVencer.length;
     document.getElementById('kpi-valor-venta').innerText = fmtMoney(valorVenta);
+    document.getElementById('kpi-ventas-mes').innerText = fmtMoney(ventasMes);
 
     const vencWrap = document.getElementById('dash-vencimientos');
     const vencEmpty = document.getElementById('dash-vencimientos-empty');
