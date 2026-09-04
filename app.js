@@ -110,6 +110,68 @@ const daysUntil = (s) => {
 };
 
 // ---------------------------------------------------------------
+// VENTA AL MENUDEO: un producto puede definir cuántas "unidades sueltas"
+// (pastillas, ampollas, sobres) trae un empaque completo (caja), y
+// opcionalmente un nivel intermedio (blister). Existencias SIEMPRE se
+// cuenta en la unidad más pequeña por dentro; estas funciones solo
+// convierten esa cifra hacia/desde caja-blister-suelta para mostrarla o
+// para capturar entradas/salidas. Si Unidades_Por_Empaque está vacío, el
+// producto se comporta exactamente como antes (unidad entera, sin cambios).
+// ---------------------------------------------------------------
+const nombreEmpaque = (p) => (p && p.Nombre_Empaque) ? p.Nombre_Empaque : 'Caja';
+const nombreBlister = (p) => (p && p.Nombre_Blister) ? p.Nombre_Blister : 'Blister';
+const nombreUnidad = (p) => (p && p.Nombre_Unidad) ? p.Nombre_Unidad : 'Unidad';
+const factorEmpaque = (p) => Number(p && p.Unidades_Por_Empaque) || 0;
+const factorBlisterDe = (p) => Number(p && p.Unidades_Por_Blister) || 0;
+const tieneMenudeo = (p) => factorEmpaque(p) > 0;
+const tieneBlister = (p) => factorBlisterDe(p) > 0;
+
+function pluralizar(palabra, cantidad) {
+    palabra = (palabra || '').trim();
+    if (!palabra) return palabra;
+    if (Number(cantidad) === 1) return palabra;
+    if (/[dz]$/i.test(palabra)) return palabra + 'es';
+    return palabra + 's';
+}
+
+// Descompone un total de unidades sueltas en cajas + blisters + sueltas
+// para mostrarlo de forma legible (ej. "10 Cajas y 2 Pastillas").
+function desgloseUnidades(p, total) {
+    total = Math.max(0, Number(total) || 0);
+    const fEmpaque = factorEmpaque(p);
+    if (!fEmpaque) return { cajas: 0, blisters: 0, sueltas: total, texto: `${total} ${pluralizar(nombreUnidad(p), total)}` };
+
+    const fBlister = factorBlisterDe(p);
+    let resto = total;
+    const cajas = Math.floor(resto / fEmpaque);
+    resto -= cajas * fEmpaque;
+    let blisters = 0;
+    if (fBlister > 0) {
+        blisters = Math.floor(resto / fBlister);
+        resto -= blisters * fBlister;
+    }
+    const sueltas = resto;
+
+    const partes = [];
+    if (cajas > 0) partes.push(`${cajas} ${pluralizar(nombreEmpaque(p), cajas)}`);
+    if (blisters > 0) partes.push(`${blisters} ${pluralizar(nombreBlister(p), blisters)}`);
+    if (sueltas > 0 || partes.length === 0) partes.push(`${sueltas} ${pluralizar(nombreUnidad(p), sueltas)}`);
+    return { cajas, blisters, sueltas, texto: partes.join(' y ') };
+}
+
+function calcularTotalDesdeEmpaques(p, cajas, blisters, sueltas) {
+    return (Number(cajas) || 0) * factorEmpaque(p) + (Number(blisters) || 0) * factorBlisterDe(p) + (Number(sueltas) || 0);
+}
+
+function construirPresentacion(p, cajas, blisters, sueltas) {
+    const partes = [];
+    if (Number(cajas) > 0) partes.push(`${cajas} ${pluralizar(nombreEmpaque(p), Number(cajas))}`);
+    if (Number(blisters) > 0) partes.push(`${blisters} ${pluralizar(nombreBlister(p), Number(blisters))}`);
+    if (Number(sueltas) > 0) partes.push(`${sueltas} ${pluralizar(nombreUnidad(p), Number(sueltas))}`);
+    return partes.join(' + ');
+}
+
+// ---------------------------------------------------------------
 // NAVEGACIÓN
 // ---------------------------------------------------------------
 document.querySelectorAll('.nav-btn').forEach(btn => {
@@ -445,6 +507,8 @@ function resetFormProducto() {
     document.getElementById('prd-precio').value = '';
     document.getElementById('prd-cantidad-inicial').value = 0;
     document.getElementById('prd-existencias').value = '';
+    document.getElementById('prd-existencias-override').value = '';
+    document.getElementById('prd-existencias-desglose').innerText = 'Se actualiza desde "Movimiento"';
     document.getElementById('prd-stock-minimo').value = '';
     document.getElementById('prd-proveedor').value = '';
     document.getElementById('prd-proveedor-tel').value = '';
@@ -452,7 +516,118 @@ function resetFormProducto() {
     document.getElementById('prd-lotes-list').innerHTML = '';
     mostrarPreviewImagen('');
     document.getElementById('prd-margen-calc').innerText = '0.00%';
+
+    document.getElementById('prd-menudeo-check').checked = false;
+    document.getElementById('prd-menudeo-wrap').classList.add('hidden');
+    document.getElementById('prd-nombre-empaque').value = '';
+    document.getElementById('prd-unidades-empaque').value = '';
+    document.getElementById('prd-nombre-blister').value = '';
+    document.getElementById('prd-unidades-blister').value = '';
+    document.getElementById('prd-nombre-unidad').value = '';
+    document.getElementById('prd-menudeo-warning').classList.add('hidden');
+    document.getElementById('prd-convertir-wrap').classList.add('hidden');
+    document.getElementById('prd-ci-cajas').value = 0;
+    document.getElementById('prd-ci-blisters').value = 0;
+    document.getElementById('prd-ci-sueltas').value = 0;
+    document.getElementById('prd-cantidad-wrap').classList.remove('hidden');
+    document.getElementById('prd-cantidad-menudeo-wrap').classList.add('hidden');
 }
+
+// Producto "de mentira" armado con lo que hay ahora mismo en el formulario
+// de empaque, para poder calcular/etiquetar antes de guardar el producto.
+function productoTemporalDeFormulario() {
+    return {
+        Nombre_Empaque: document.getElementById('prd-nombre-empaque').value.trim(),
+        Unidades_Por_Empaque: document.getElementById('prd-unidades-empaque').value,
+        Nombre_Blister: document.getElementById('prd-nombre-blister').value.trim(),
+        Unidades_Por_Blister: document.getElementById('prd-unidades-blister').value,
+        Nombre_Unidad: document.getElementById('prd-nombre-unidad').value.trim()
+    };
+}
+
+window.toggleMenudeoProducto = () => {
+    const checked = document.getElementById('prd-menudeo-check').checked;
+    document.getElementById('prd-menudeo-wrap').classList.toggle('hidden', !checked);
+    onMenudeoCamposChange();
+};
+
+// Se dispara con cada cambio en los campos de empaque: refresca etiquetas,
+// recalcula totales y (en edición) el aviso de conversión de existencias.
+window.onMenudeoCamposChange = () => {
+    const isEdit = !!document.getElementById('prd-id').value;
+    const p = productoTemporalDeFormulario();
+    const hayBlister = !!(p.Nombre_Blister || Number(p.Unidades_Por_Blister) > 0);
+
+    document.getElementById('prd-ci-empaque-label').innerText = pluralizar(nombreEmpaque(p), 2);
+    document.getElementById('prd-ci-blister-label').innerText = pluralizar(nombreBlister(p), 2);
+    document.getElementById('prd-ci-unidad-label').innerText = pluralizar(nombreUnidad(p), 2);
+    document.getElementById('prd-ci-blister-wrap').classList.toggle('hidden', !hayBlister);
+
+    const checked = document.getElementById('prd-menudeo-check').checked;
+    if (!isEdit) {
+        document.getElementById('prd-cantidad-wrap').classList.toggle('hidden', checked);
+        document.getElementById('prd-cantidad-menudeo-wrap').classList.toggle('hidden', !checked);
+        if (checked) recalcCantidadInicialMenudeo();
+    } else {
+        actualizarAvisoConversion();
+    }
+};
+
+window.recalcCantidadInicialMenudeo = () => {
+    const p = productoTemporalDeFormulario();
+    const cajas = document.getElementById('prd-ci-cajas').value;
+    const blisters = document.getElementById('prd-ci-blisters').value;
+    const sueltas = document.getElementById('prd-ci-sueltas').value;
+    const total = calcularTotalDesdeEmpaques(p, cajas, blisters, sueltas);
+    document.getElementById('prd-cantidad-inicial').value = total;
+    document.getElementById('prd-ci-total').innerText = total;
+    document.getElementById('prd-ci-total-unidad').innerText = pluralizar(nombreUnidad(p), total);
+};
+
+// Si se activa "vender por unidad suelta" en un producto que YA tenía
+// existencias contadas como unidad entera, hay que avisar y ofrecer
+// convertir ese número al nuevo conteo en unidades sueltas (si no, el
+// stock quedaría descuadrado: 12 dejaría de significar "12 cajas").
+function actualizarAvisoConversion() {
+    const wrap = document.getElementById('prd-convertir-wrap');
+    const warnBox = document.getElementById('prd-menudeo-warning');
+    const checked = document.getElementById('prd-menudeo-check').checked;
+    const id = document.getElementById('prd-id').value;
+
+    if (!id || !checked) { wrap.classList.add('hidden'); warnBox.classList.add('hidden'); return; }
+
+    const original = DB.Productos.find(x => String(x.ID_Producto) === String(id));
+    const yaTeniaMenudeo = original && tieneMenudeo(original);
+    const existenciasActuales = Number(document.getElementById('prd-existencias').value) || 0;
+    const factor = Number(document.getElementById('prd-unidades-empaque').value) || 0;
+
+    if (yaTeniaMenudeo || existenciasActuales <= 0 || !factor) {
+        wrap.classList.add('hidden');
+        warnBox.classList.add('hidden');
+        return;
+    }
+
+    const p = productoTemporalDeFormulario();
+    const nuevoTotal = existenciasActuales * factor;
+    warnBox.classList.remove('hidden');
+    warnBox.innerText = `Este producto ya tiene ${existenciasActuales} registradas como unidades enteras. Si eso son ${pluralizar(nombreEmpaque(p), existenciasActuales).toLowerCase()} completas, conviértelas para no descuadrar el conteo (los lotes/movimientos ya guardados no se recalculan).`;
+
+    const btn = document.getElementById('prd-btn-convertir');
+    btn.innerText = `Convertir ${existenciasActuales} ${pluralizar(nombreEmpaque(p), existenciasActuales)} a ${nuevoTotal} ${pluralizar(nombreUnidad(p), nuevoTotal)}`;
+    wrap.classList.remove('hidden');
+}
+
+window.convertirExistenciasAUnidad = () => {
+    const existenciasActuales = Number(document.getElementById('prd-existencias').value) || 0;
+    const factor = Number(document.getElementById('prd-unidades-empaque').value) || 0;
+    if (!factor) return;
+    const nuevoTotal = existenciasActuales * factor;
+    document.getElementById('prd-existencias').value = nuevoTotal;
+    document.getElementById('prd-existencias-override').value = nuevoTotal;
+    document.getElementById('prd-convertir-wrap').classList.add('hidden');
+    document.getElementById('prd-menudeo-warning').classList.add('hidden');
+    showToast(`Existencias convertidas a ${nuevoTotal} ${pluralizar(nombreUnidad(productoTemporalDeFormulario()), nuevoTotal)}. Se guardará al presionar "Guardar producto".`);
+};
 
 window.openNewProducto = () => {
     resetFormProducto();
@@ -488,6 +663,18 @@ window.openEditProducto = async (id) => {
     document.getElementById('prd-lotes-list').innerHTML = lotes.map(l => loteChipHtml(l)).join('');
     document.getElementById('prd-lotes-empty').classList.toggle('hidden', lotes.length > 0);
 
+    document.getElementById('prd-menudeo-check').checked = tieneMenudeo(p);
+    document.getElementById('prd-nombre-empaque').value = p.Nombre_Empaque || '';
+    document.getElementById('prd-unidades-empaque').value = p.Unidades_Por_Empaque || '';
+    document.getElementById('prd-nombre-blister').value = p.Nombre_Blister || '';
+    document.getElementById('prd-unidades-blister').value = p.Unidades_Por_Blister || '';
+    document.getElementById('prd-nombre-unidad').value = p.Nombre_Unidad || '';
+    document.getElementById('prd-menudeo-wrap').classList.toggle('hidden', !tieneMenudeo(p));
+    document.getElementById('prd-existencias-desglose').innerText = tieneMenudeo(p)
+        ? desgloseUnidades(p, p.Existencias).texto + ' · se actualiza desde "Movimiento"'
+        : 'Se actualiza desde "Movimiento"';
+    onMenudeoCamposChange();
+
     document.getElementById('prd-btn-eliminar').classList.toggle('hidden', userRole !== 'admin');
     calcMargen();
     openModal('mod-producto');
@@ -518,6 +705,12 @@ window.saveProducto = async () => {
         return;
     }
 
+    const menudeoActivo = document.getElementById('prd-menudeo-check').checked;
+    if (menudeoActivo && !Number(document.getElementById('prd-unidades-empaque').value)) {
+        showToast(`Indica cuántas unidades sueltas trae un ${nombreEmpaque(productoTemporalDeFormulario()).toLowerCase()} completo.`, 'error');
+        return;
+    }
+
     // El backend reescribe la fila completa, así que hay que reenviar
     // también los campos que no están en este formulario (existencias, etc.)
     const stockMinimoVal = document.getElementById('prd-stock-minimo').value;
@@ -528,7 +721,12 @@ window.saveProducto = async () => {
         Stock_Minimo: stockMinimoVal === '' ? '' : Number(stockMinimoVal),
         Proveedor: document.getElementById('prd-proveedor').value.trim(),
         Proveedor_Telefono: document.getElementById('prd-proveedor-tel').value.trim(),
-        Imagen_Base64: document.getElementById('prd-imagen-data').value
+        Imagen_Base64: document.getElementById('prd-imagen-data').value,
+        Nombre_Empaque: menudeoActivo ? (document.getElementById('prd-nombre-empaque').value.trim() || 'Caja') : '',
+        Unidades_Por_Empaque: menudeoActivo ? Number(document.getElementById('prd-unidades-empaque').value) : '',
+        Nombre_Blister: menudeoActivo ? document.getElementById('prd-nombre-blister').value.trim() : '',
+        Unidades_Por_Blister: (menudeoActivo && document.getElementById('prd-unidades-blister').value !== '') ? Number(document.getElementById('prd-unidades-blister').value) : '',
+        Nombre_Unidad: menudeoActivo ? (document.getElementById('prd-nombre-unidad').value.trim() || 'Unidad') : ''
     };
 
     const btn = document.getElementById('prd-btn-guardar');
@@ -539,9 +737,10 @@ window.saveProducto = async () => {
         let resp;
         if (id) {
             const existente = DB.Productos.find(x => String(x.ID_Producto) === String(id)) || {};
+            const existenciasOverride = document.getElementById('prd-existencias-override').value;
             rowData.ID_Producto = id;
             rowData.Cantidad_Inicial = existente.Cantidad_Inicial;
-            rowData.Existencias = existente.Existencias;
+            rowData.Existencias = existenciasOverride !== '' ? Number(existenciasOverride) : existente.Existencias;
             rowData.Creado_En = existente.Creado_En;
             resp = await apiCall('crud', { sheetName: 'Productos', operation: 'update', idField: 'ID_Producto', idValue: id, rowData });
         } else {
@@ -596,6 +795,8 @@ window.executeDeleteProducto = async () => {
 // ---------------------------------------------------------------
 // MOVIMIENTO DE STOCK (entradas de reabastecimiento / salidas de consumo)
 // ---------------------------------------------------------------
+let movimientoProductoActual = null;
+
 window.setMovimientoTipo = (tipo) => {
     document.getElementById('mov-tipo').value = tipo;
     const tabEntrada = document.getElementById('mov-tab-entrada');
@@ -607,10 +808,27 @@ window.setMovimientoTipo = (tipo) => {
 
     document.getElementById('mov-campos-entrada').classList.toggle('hidden', !esEntrada);
     document.getElementById('mov-campos-salida').classList.toggle('hidden', esEntrada);
-    document.getElementById('mov-cantidad-label').innerText = esEntrada ? 'Cantidad a agregar *' : 'Cantidad a descontar *';
+    const etiqueta = esEntrada ? 'Cantidad a agregar *' : 'Cantidad a descontar *';
+    document.getElementById('mov-cantidad-label').innerText = etiqueta;
+    document.getElementById('mov-cantidad-menudeo-label').innerText = etiqueta;
 
     const btn = document.getElementById('mov-btn-guardar');
     btn.className = esEntrada ? 'flex-1 btn-accent' : 'flex-1 btn-danger !bg-red-500 !text-white !border-red-500';
+};
+
+// Cuando el producto vende por unidad suelta, se piden cajas/blisters/sueltas
+// por separado y se convierten a un solo total (en la unidad más pequeña)
+// antes de enviarlo — el backend sigue recibiendo la misma "cantidad" de siempre.
+window.recalcCantidadMovimiento = () => {
+    if (!movimientoProductoActual) return;
+    const p = movimientoProductoActual;
+    const cajas = document.getElementById('mov-cajas').value;
+    const blisters = document.getElementById('mov-blisters').value;
+    const sueltas = document.getElementById('mov-sueltas').value;
+    const total = calcularTotalDesdeEmpaques(p, cajas, blisters, sueltas);
+    document.getElementById('mov-cantidad').value = total;
+    document.getElementById('mov-total-preview').innerText = total;
+    document.getElementById('mov-total-unidad-preview').innerText = pluralizar(nombreUnidad(p), total);
 };
 
 function mostrarImagenMovimiento(dataUrl) {
@@ -631,15 +849,31 @@ function mostrarImagenMovimiento(dataUrl) {
 window.openMovimientoModal = async (id) => {
     const p = DB.Productos.find(x => String(x.ID_Producto) === String(id));
     if (!p) return;
+    movimientoProductoActual = p;
     document.getElementById('mov-id-producto').value = id;
     document.getElementById('mov-nombre-producto').innerText = p.Nombre;
-    document.getElementById('mov-existencias-actuales').innerText = p.Existencias || 0;
+    document.getElementById('mov-existencias-actuales').innerText = tieneMenudeo(p) ? desgloseUnidades(p, p.Existencias).texto : (p.Existencias || 0);
     document.getElementById('mov-cantidad').value = '';
     document.getElementById('mov-costo-unitario').value = p.Costo || '';
     document.getElementById('mov-proveedor').value = p.Proveedor || '';
     document.getElementById('mov-vencimiento').value = '';
     document.getElementById('mov-motivo').value = 'Venta';
     document.getElementById('mov-notas').value = '';
+
+    const menudeo = tieneMenudeo(p);
+    document.getElementById('mov-cantidad-simple-wrap').classList.toggle('hidden', menudeo);
+    document.getElementById('mov-cantidad-menudeo-wrap').classList.toggle('hidden', !menudeo);
+    if (menudeo) {
+        document.getElementById('mov-cajas-label').innerText = pluralizar(nombreEmpaque(p), 2);
+        document.getElementById('mov-blister-label').innerText = pluralizar(nombreBlister(p), 2);
+        document.getElementById('mov-sueltas-label').innerText = pluralizar(nombreUnidad(p), 2);
+        document.getElementById('mov-blister-wrap').classList.toggle('hidden', !tieneBlister(p));
+        document.getElementById('mov-cajas').value = 0;
+        document.getElementById('mov-blisters').value = 0;
+        document.getElementById('mov-sueltas').value = 0;
+        recalcCantidadMovimiento();
+    }
+
     setMovimientoTipo('Entrada');
     mostrarImagenMovimiento('');
     openModal('mod-movimiento');
@@ -659,7 +893,20 @@ window.openMovimientoModal = async (id) => {
 window.saveMovimiento = async () => {
     const idProducto = document.getElementById('mov-id-producto').value;
     const tipo = document.getElementById('mov-tipo').value;
-    const cantidad = Number(document.getElementById('mov-cantidad').value);
+    const p = movimientoProductoActual;
+    const menudeo = tieneMenudeo(p);
+
+    let cantidad, presentacion = '';
+    if (menudeo) {
+        const cajas = document.getElementById('mov-cajas').value;
+        const blisters = document.getElementById('mov-blisters').value;
+        const sueltas = document.getElementById('mov-sueltas').value;
+        cantidad = calcularTotalDesdeEmpaques(p, cajas, blisters, sueltas);
+        presentacion = construirPresentacion(p, cajas, blisters, sueltas);
+    } else {
+        cantidad = Number(document.getElementById('mov-cantidad').value);
+    }
+
     if (!cantidad || cantidad <= 0) {
         showToast('Ingresa una cantidad válida.', 'error');
         return;
@@ -673,6 +920,7 @@ window.saveMovimiento = async () => {
             idProducto,
             tipo,
             cantidad,
+            presentacion,
             costoUnitario: tipo === 'Entrada' ? document.getElementById('mov-costo-unitario').value : '',
             proveedor: tipo === 'Entrada' ? document.getElementById('mov-proveedor').value.trim() : '',
             fechaVencimiento: tipo === 'Entrada' ? document.getElementById('mov-vencimiento').value : '',
@@ -699,7 +947,7 @@ function itemHistorialHtml(r) {
                     <i class="fa-solid ${esEntrada ? 'fa-arrow-down' : 'fa-arrow-up'} text-xs"></i>
                 </div>
                 <div class="min-w-0">
-                    <p class="text-sm font-bold text-primary">${esEntrada ? '+' : '-'}${r.Cantidad} unidades</p>
+                    <p class="text-sm font-bold text-primary">${esEntrada ? '+' : '-'}${r.Presentacion ? escapeHtml(r.Presentacion) : `${r.Cantidad} unidades`}</p>
                     <p class="text-xs text-gray-400 truncate">${r.Fecha || ''} ${detalle ? '· ' + escapeHtml(detalle) : ''}</p>
                     ${r.Notas ? `<p class="text-xs text-gray-500 mt-1">${escapeHtml(r.Notas)}</p>` : ''}
                 </div>
@@ -737,11 +985,15 @@ window.verHistorialProducto = (id) => {
 // ---------------------------------------------------------------
 // RENDER: INVENTARIO
 // ---------------------------------------------------------------
+// El umbral de stock bajo/sin-stock siempre se evalúa sobre la unidad más
+// pequeña (Existencias real); solo el TEXTO mostrado cambia a "10 Cajas y 2
+// Pastillas" cuando el producto vende al menudeo.
 function badgeStock(p) {
     const existencias = Number(p.Existencias) || 0;
+    const texto = tieneMenudeo(p) ? desgloseUnidades(p, existencias).texto : existencias;
     if (existencias <= 0) return `<span class="badge badge-red"><i class="fa-solid fa-circle-xmark"></i>Sin stock</span>`;
-    if (existencias <= stockMinimo(p)) return `<span class="badge badge-amber"><i class="fa-solid fa-battery-quarter"></i>${existencias} — stock bajo</span>`;
-    return `<span class="badge badge-green"><i class="fa-solid fa-circle-check"></i>${existencias} en stock</span>`;
+    if (existencias <= stockMinimo(p)) return `<span class="badge badge-amber"><i class="fa-solid fa-battery-quarter"></i>${texto} — stock bajo</span>`;
+    return `<span class="badge badge-green"><i class="fa-solid fa-circle-check"></i>${texto} en stock</span>`;
 }
 
 // Recibe la fecha del PRÓXIMO lote activo del producto (no un campo fijo en
@@ -870,7 +1122,7 @@ window.renderDashboard = () => {
                         <p class="text-xs text-gray-400">Mínimo: ${stockMinimo(p)}</p>
                     </div>
                 </div>
-                <span class="badge badge-amber">${p.Existencias || 0}</span>
+                <span class="badge badge-amber">${tieneMenudeo(p) ? desgloseUnidades(p, p.Existencias).texto : (p.Existencias || 0)}</span>
             </div>
         `);
     });
@@ -888,7 +1140,7 @@ window.renderDashboard = () => {
                     <p class="text-sm font-bold text-primary truncate">${escapeHtml(r.Producto_Nombre || '')}</p>
                     <p class="text-xs text-gray-400">${r.Fecha || ''}</p>
                 </div>
-                <span class="text-sm font-black shrink-0 ${esEntrada ? 'text-emerald-600' : 'text-red-500'}">${esEntrada ? '+' : '-'}${r.Cantidad}</span>
+                <span class="text-sm font-black shrink-0 ${esEntrada ? 'text-emerald-600' : 'text-red-500'}">${esEntrada ? '+' : '-'}${r.Presentacion || r.Cantidad}</span>
             </div>
         `);
     });
@@ -917,7 +1169,10 @@ window.renderHistorial = () => {
                 <td class="px-4 py-3 text-gray-500 whitespace-nowrap">${r.Fecha || ''}</td>
                 <td class="px-4 py-3 font-semibold text-primary">${escapeHtml(r.Producto_Nombre || '')}</td>
                 <td class="px-4 py-3">${esEntrada ? '<span class="badge badge-green">Entrada</span>' : '<span class="badge badge-red">Salida</span>'}</td>
-                <td class="px-4 py-3 text-right font-bold ${esEntrada ? 'text-emerald-600' : 'text-red-500'}">${esEntrada ? '+' : '-'}${r.Cantidad}</td>
+                <td class="px-4 py-3 text-right font-bold ${esEntrada ? 'text-emerald-600' : 'text-red-500'}">
+                    ${esEntrada ? '+' : '-'}${r.Cantidad}
+                    ${r.Presentacion ? `<br><span class="text-[10px] font-normal text-gray-400">${escapeHtml(r.Presentacion)}</span>` : ''}
+                </td>
                 <td class="px-4 py-3 text-gray-500">${escapeHtml((esEntrada ? r.Proveedor : r.Motivo) || '—')}</td>
                 <td class="px-4 py-3 text-right text-gray-500">${r.Costo_Unitario ? fmtMoney(r.Costo_Unitario) : '—'}</td>
                 <td class="px-4 py-3 text-gray-500">${escapeHtml(r.Usuario || '—')}</td>

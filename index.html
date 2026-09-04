@@ -292,14 +292,70 @@
                         <p class="text-xs text-gray-500 font-bold uppercase">Margen de ganancia calculado</p>
                         <p class="text-2xl font-black text-primary" id="prd-margen-calc">0.00%</p>
                     </div>
+
+                    <div class="col-span-2 border-t border-gray-200 pt-3">
+                        <label class="flex items-center gap-2 cursor-pointer select-none">
+                            <input type="checkbox" id="prd-menudeo-check" class="w-4 h-4 rounded accent-accent" onchange="toggleMenudeoProducto()">
+                            <span class="text-xs font-bold text-gray-500 uppercase">Vender por unidad suelta (blister / ampolla / sobre)</span>
+                        </label>
+                    </div>
+                    <div class="col-span-2 hidden space-y-3 bg-gray-50 border border-gray-200 rounded-lg p-3" id="prd-menudeo-wrap">
+                        <div id="prd-menudeo-warning" class="hidden text-xs bg-amber-50 border border-amber-200 text-amber-700 rounded-lg p-2.5"></div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-[11px] font-bold text-gray-500 uppercase mb-1">Nombre del empaque grande</label>
+                                <input type="text" id="prd-nombre-empaque" class="input-base" placeholder="Caja" oninput="onMenudeoCamposChange()">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-gray-500 uppercase mb-1">Unidades por empaque *</label>
+                                <input type="number" min="1" id="prd-unidades-empaque" class="input-base" placeholder="Ej: 20" oninput="onMenudeoCamposChange()">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-gray-500 uppercase mb-1">Nivel intermedio <span class="normal-case font-normal text-gray-400">(opc.)</span></label>
+                                <input type="text" id="prd-nombre-blister" class="input-base" placeholder="Blister" oninput="onMenudeoCamposChange()">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-gray-500 uppercase mb-1">Unidades por blister <span class="normal-case font-normal text-gray-400">(opc.)</span></label>
+                                <input type="number" min="1" id="prd-unidades-blister" class="input-base" placeholder="Ej: 10" oninput="onMenudeoCamposChange()">
+                            </div>
+                            <div class="col-span-2">
+                                <label class="block text-[11px] font-bold text-gray-500 uppercase mb-1">Nombre de la unidad más pequeña</label>
+                                <input type="text" id="prd-nombre-unidad" class="input-base" placeholder="Pastilla, ampolla, sobre…" oninput="onMenudeoCamposChange()">
+                            </div>
+                        </div>
+                        <p class="text-[11px] text-gray-400">Deja "nivel intermedio" vacío si este producto no se organiza en blisters (ej. ampollas sueltas en una caja).</p>
+                        <div id="prd-convertir-wrap" class="hidden">
+                            <button type="button" id="prd-btn-convertir" onclick="convertirExistenciasAUnidad()" class="w-full text-xs font-bold text-amber-700 bg-amber-100 hover:bg-amber-200 rounded-lg py-2"></button>
+                        </div>
+                    </div>
+
                     <div id="prd-cantidad-wrap">
                         <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Cantidad inicial *</label>
                         <input type="number" min="0" id="prd-cantidad-inicial" class="input-base" value="0" required>
                     </div>
+                    <div class="hidden col-span-2" id="prd-cantidad-menudeo-wrap">
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Cantidad inicial (por empaque)</label>
+                        <div class="grid grid-cols-3 gap-2">
+                            <div>
+                                <label class="block text-[10px] text-gray-400 mb-1" id="prd-ci-empaque-label">Cajas</label>
+                                <input type="number" min="0" id="prd-ci-cajas" class="input-base" value="0" oninput="recalcCantidadInicialMenudeo()">
+                            </div>
+                            <div id="prd-ci-blister-wrap">
+                                <label class="block text-[10px] text-gray-400 mb-1" id="prd-ci-blister-label">Blisters</label>
+                                <input type="number" min="0" id="prd-ci-blisters" class="input-base" value="0" oninput="recalcCantidadInicialMenudeo()">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] text-gray-400 mb-1" id="prd-ci-unidad-label">Sueltas</label>
+                                <input type="number" min="0" id="prd-ci-sueltas" class="input-base" value="0" oninput="recalcCantidadInicialMenudeo()">
+                            </div>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1.5">Total: <span class="font-bold text-primary" id="prd-ci-total">0</span> <span id="prd-ci-total-unidad">unidades</span></p>
+                    </div>
                     <div id="prd-existencias-wrap" class="hidden">
                         <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Existencias actuales</label>
                         <input type="number" id="prd-existencias" class="input-base" disabled>
-                        <p class="text-[10px] text-gray-400 mt-1">Se actualiza desde "Movimiento"</p>
+                        <input type="hidden" id="prd-existencias-override">
+                        <p class="text-[10px] text-gray-400 mt-1" id="prd-existencias-desglose">Se actualiza desde "Movimiento"</p>
                     </div>
                     <div class="col-span-2">
                         <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Stock mínimo para alerta <span class="normal-case font-normal text-gray-400">(opcional, por defecto 5)</span></label>
@@ -359,9 +415,27 @@
                         <p class="text-xs text-gray-400 mt-1">Existencias actuales: <span id="mov-existencias-actuales" class="font-bold text-primary">0</span></p>
                     </div>
                 </div>
-                <div>
+                <div id="mov-cantidad-simple-wrap">
                     <label class="block text-xs font-bold text-gray-500 uppercase mb-1" id="mov-cantidad-label">Cantidad a agregar *</label>
                     <input type="number" min="1" id="mov-cantidad" class="input-base" required>
+                </div>
+                <div class="hidden" id="mov-cantidad-menudeo-wrap">
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1" id="mov-cantidad-menudeo-label">Cantidad a agregar *</label>
+                    <div class="grid grid-cols-3 gap-2">
+                        <div>
+                            <label class="block text-[10px] text-gray-400 mb-1" id="mov-cajas-label">Cajas</label>
+                            <input type="number" min="0" id="mov-cajas" class="input-base" value="0" oninput="recalcCantidadMovimiento()">
+                        </div>
+                        <div id="mov-blister-wrap">
+                            <label class="block text-[10px] text-gray-400 mb-1" id="mov-blister-label">Blisters</label>
+                            <input type="number" min="0" id="mov-blisters" class="input-base" value="0" oninput="recalcCantidadMovimiento()">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-gray-400 mb-1" id="mov-sueltas-label">Sueltas</label>
+                            <input type="number" min="0" id="mov-sueltas" class="input-base" value="0" oninput="recalcCantidadMovimiento()">
+                        </div>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1.5">Total: <span class="font-bold text-primary" id="mov-total-preview">0</span> <span id="mov-total-unidad-preview">unidades</span></p>
                 </div>
 
                 <div id="mov-campos-entrada" class="space-y-3">
